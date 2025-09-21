@@ -49,6 +49,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameState = {};
     let selectedPieceInfo = null;
 
+    // --- Helper Functions ---
+    /**
+     * Shuffles an array in place using the Fisher-Yates (aka Knuth) shuffle.
+     * @param {Array} array The array to shuffle.
+     */
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]]; // Swap elements
+        }
+    }
+
     // --- Setup Functions ---
     function createInitialPieces(player) {
         const pieceSet = [];
@@ -86,31 +98,49 @@ document.addEventListener('DOMContentLoaded', () => {
         let pieces = createInitialPieces(player);
         let placementInfo = getPlayerPlacementInfo(player);
         let availablePositions = [...placementInfo.positions];
+
+        // Shuffle all available positions once at the beginning for true randomness
+        shuffleArray(availablePositions);
+
         const placePiece = (pieceType) => {
             const pieceIndex = pieces.findIndex(p => p.type === pieceType);
             const piece = pieces.splice(pieceIndex, 1)[0];
             let placed = false;
-            let attempts = 0;
-            while(!placed && attempts < 100) {
-                const posIndex = Math.floor(Math.random() * availablePositions.length);
-                const pos = availablePositions[posIndex];
-                if (piece.type === 'flag' && !placementInfo.hq.some(p => p[0]===pos[0] && p[1]===pos[1])) { attempts++; continue; }
-                if (piece.type === 'landmine' && !placementInfo.backRows.includes(pos[0])) { attempts++; continue; }
-                if (piece.type === 'bomb' && placementInfo.frontRow === pos[0]) { attempts++; continue; }
+
+            // Find a valid position from the shuffled list
+            for (let i = 0; i < availablePositions.length; i++) {
+                const pos = availablePositions[i];
+
+                // Rule checks
+                if (piece.type === 'flag' && !placementInfo.hq.some(p => p[0]===pos[0] && p[1]===pos[1])) continue;
+                if (piece.type === 'landmine' && !placementInfo.backRows.includes(pos[0])) continue;
+                if (piece.type === 'bomb' && placementInfo.frontRow === pos[0]) continue;
+
+                // Place the piece
                 piece.position = { r: pos[0], c: pos[1] };
                 gameState.board[pos[0]][pos[1]] = piece;
-                availablePositions.splice(posIndex, 1);
+                availablePositions.splice(i, 1); // Remove the used position
                 placed = true;
+                break; // Exit the loop once placed
             }
         };
+
+        // Place special pieces with placement restrictions first
         placePiece('flag');
-        placePiece('landmine'); placePiece('landmine'); placePiece('landmine');
-        placePiece('bomb'); placePiece('bomb');
-        pieces.sort(() => Math.random() - 0.5);
+        placePiece('landmine');
+        placePiece('landmine');
+        placePiece('landmine');
+        placePiece('bomb');
+        placePiece('bomb');
+
+        // Shuffle the remaining general pieces
+        shuffleArray(pieces);
+
+        // Place the rest of the pieces into the remaining shuffled positions
         pieces.forEach(piece => {
-            if(availablePositions.length > 0) {
-                const posIndex = Math.floor(Math.random() * availablePositions.length);
-                const pos = availablePositions.splice(posIndex, 1)[0];
+            if (availablePositions.length > 0) {
+                // Simply take the next available position from the shuffled list
+                const pos = availablePositions.pop();
                 piece.position = { r: pos[0], c: pos[1] };
                 gameState.board[pos[0]][pos[1]] = piece;
             }
