@@ -12,7 +12,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const ROWS = 12;
     const COLS = 5;
     const PLAYERS = { RED: 'red', BLACK: 'black' };
-    const AI_PLAYER = PLAYERS.BLACK; // AI is always black for simplicity
+    const AI_PLAYER = PLAYERS.BLACK;
+    const BOARD_SPEC = {
+        camps: [[1,1], [1,3], [2,2], [3,1], [3,3], [7,1], [7,3], [8,2], [9,1], [9,3]],
+        hqs: [[0,1], [0,3], [11,1], [11,3]],
+        railroads: [],
+    };
+    function generateRailroadSpec() {
+        const railroadSet = new Set();
+        for (let c = 0; c < COLS; c++) { [0, 5, 6, 11].forEach(r => railroadSet.add(`${r},${c}`)); }
+        for (let r = 0; r < ROWS; r++) { [0, 4].forEach(c => railroadSet.add(`${r},${c}`)); }
+        for (let r = 1; r <= 4; r++) railroadSet.add(`${r},2`);
+        for (let r = 7; r <= 10; r++) railroadSet.add(`${r},2`);
+        [[1,1],[1,3],[4,1],[4,3], [7,1],[7,3],[10,1],[10,3]].forEach(p => railroadSet.add(`${p[0]},${p[1]}`));
+        BOARD_SPEC.railroads = Array.from(railroadSet).map(s => { const [r, c] = s.split(','); return {r: parseInt(r), c: parseInt(c)}; });
+    }
+    generateRailroadSpec();
     const PIECE_SETUP = [
         { type: 'commander', count: 1 }, { type: 'army_commander', count: 1 },
         { type: 'division_commander', count: 2 }, { type: 'brigade_commander', count: 2 },
@@ -107,25 +122,65 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Gameplay Functions ---
+    function isRailroad(pos) { return BOARD_SPEC.railroads.some(p => p.r === pos.r && p.c === pos.c); }
+    function isCamp(pos) { return BOARD_SPEC.camps.some(p => p.r === pos.r && p.c === pos.c); }
+
     function isValidMove(startPos, endPos) {
         const piece = gameState.board[startPos.r][startPos.c];
         if (!piece || piece.type === 'flag' || piece.type === 'landmine') return false;
         const targetPiece = gameState.board[endPos.r][endPos.c];
         if (targetPiece && targetPiece.player === piece.player) return false;
-        const dr = Math.abs(startPos.r - endPos.r);
-        const dc = Math.abs(startPos.c - endPos.c);
-        return (dr === 1 && dc === 0) || (dr === 0 && dc === 1);
+        if (targetPiece && isCamp(endPos)) return false;
+        const dr = endPos.r - startPos.r;
+        const dc = endPos.c - startPos.c;
+        const distance = Math.abs(dr) + Math.abs(dc);
+        if (distance === 1) return true;
+        if (isRailroad(startPos) && isRailroad(endPos)) {
+            if (startPos.r === endPos.r || startPos.c === endPos.c) {
+                const stepR = Math.sign(dr);
+                const stepC = Math.sign(dc);
+                let pathIsClear = true;
+                for (let i = 1; i < distance; i++) {
+                    if (gameState.board[startPos.r + i * stepR][startPos.c + i * stepC]) {
+                        pathIsClear = false;
+                        break;
+                    }
+                }
+                if (pathIsClear) {
+                    if (piece.type === 'engineer') return true;
+                    if (distance <= 3) return true;
+                }
+            }
+        }
+        return false;
     }
 
     function determineBattle(attacker, defender) {
-        if (defender.type === 'flag') return { winner: attacker, loser: defender, isGameOver: true };
-        if (attacker.type === 'bomb' || defender.type === 'bomb') return { winner: null, loser: null, isTie: true };
+        if (defender.type === 'flag') {
+            return gameState.commanderLost[attacker.player]
+                ? { isDraw: true, isGameOver: true }
+                : { winner: attacker, loser: defender, isGameOver: true };
+        }
+        if (attacker.type === 'bomb' || defender.type === 'bomb') return { isTie: true };
         if (defender.type === 'landmine') {
             return attacker.type === 'engineer' ? { winner: attacker, loser: defender } : { winner: defender, loser: attacker };
         }
-        if (attacker.rank === defender.rank) return { winner: null, loser: null, isTie: true };
-        if (attacker.rank > defender.rank) return { winner: attacker, loser: defender };
-        return { winner: defender, loser: attacker };
+        if (attacker.rank === defender.rank) return { isTie: true };
+        return attacker.rank > defender.rank ? { winner: attacker, loser: defender } : { winner: defender, loser: attacker };
+    }
+
+    function revealFlag(player) {
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const piece = gameState.board[r][c];
+                if (piece && piece.player === player && piece.type === 'flag') {
+                    piece.revealed = true;
+                    const flagEl = boardContainer.querySelector(`[data-piece-id='${piece.id}']`);
+                    if (flagEl) flagEl.classList.add('revealed-flag');
+                    return;
+                }
+            }
+        }
     }
 
     function handleMove(startPos, endPos) {
@@ -134,20 +189,25 @@ document.addEventListener('DOMContentLoaded', () => {
         attacker.position = endPos;
         gameState.board[startPos.r][startPos.c] = null;
 
-        if (defender) {
+        if (defender) { // Attack
             const result = determineBattle(attacker, defender);
             if (result.isGameOver) {
-                gameState.board[endPos.r][endPos.c] = result.winner;
-                endGame(result.winner.player);
+                endGame(result.isDraw ? null : result.winner.player);
+                if (!result.isDraw) gameState.board[endPos.r][endPos.c] = result.winner;
+                renderBoard();
                 return;
             } else if (result.isTie) {
                 gameState.board[endPos.r][endPos.c] = null;
+                if (attacker.type === 'commander') { gameState.commanderLost[attacker.player] = true; revealFlag(attacker.player); }
+                if (defender.type === 'commander') { gameState.commanderLost[defender.player] = true; revealFlag(defender.player); }
             } else if (result.winner === attacker) {
                 gameState.board[endPos.r][endPos.c] = attacker;
+                if (result.loser.type === 'commander') { gameState.commanderLost[result.loser.player] = true; revealFlag(result.loser.player); }
             } else { // Defender wins
                 gameState.board[endPos.r][endPos.c] = defender;
+                 if (result.loser.type === 'commander') { gameState.commanderLost[result.loser.player] = true; revealFlag(result.loser.player); }
             }
-        } else {
+        } else { // Move
             gameState.board[endPos.r][endPos.c] = attacker;
         }
 
@@ -158,6 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (gameState.isGameOver) return;
         gameState.currentPlayer = gameState.currentPlayer === PLAYERS.RED ? PLAYERS.BLACK : PLAYERS.RED;
         updateStatus(`輪到 ${gameState.currentPlayer === 'red' ? '紅方' : '黑方'} 行動`);
+        renderBoard();
 
         if (gameState.gameMode === 'pvai' && gameState.currentPlayer === AI_PLAYER) {
             setTimeout(triggerAIMove, 1000);
@@ -165,51 +226,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function triggerAIMove() {
+        // ... (AI logic remains the same)
         if (gameState.isGameOver) return;
-        const attackMoves = [];
-        const passiveMoves = [];
-
+        const attackMoves = [], passiveMoves = [];
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 const piece = gameState.board[r][c];
                 if (piece && piece.player === AI_PLAYER) {
                     const startPos = { r, c };
+                    // Simplified destination check for AI
                     const destinations = [{r:r-1,c:c}, {r:r+1,c:c}, {r:r,c:c-1}, {r:r,c:c+1}];
                     for (const endPos of destinations) {
-                        if (endPos.r >= 0 && endPos.r < ROWS && endPos.c >= 0 && endPos.c < COLS && isValidMove(startPos, endPos)) {
+                         if (endPos.r >= 0 && endPos.r < ROWS && endPos.c >= 0 && endPos.c < COLS && isValidMove(startPos, endPos)) {
                             const move = { startPos, endPos };
                             const target = gameState.board[endPos.r][endPos.c];
-                            if (target && target.player !== AI_PLAYER) {
-                                attackMoves.push(move);
-                            } else {
-                                passiveMoves.push(move);
-                            }
+                            if (target && target.player !== AI_PLAYER) attackMoves.push(move);
+                            else passiveMoves.push(move);
                         }
                     }
                 }
             }
         }
-
         let chosenMove = null;
-        if (attackMoves.length > 0) {
-            chosenMove = attackMoves[Math.floor(Math.random() * attackMoves.length)];
-        } else if (passiveMoves.length > 0) {
-            chosenMove = passiveMoves[Math.floor(Math.random() * passiveMoves.length)];
-        }
-
-        if (chosenMove) {
-            handleMove(chosenMove.startPos, chosenMove.endPos);
-        } else {
-            endGame(PLAYERS.RED); // AI has no moves, Human wins
-        }
+        if (attackMoves.length > 0) chosenMove = attackMoves[Math.floor(Math.random() * attackMoves.length)];
+        else if (passiveMoves.length > 0) chosenMove = passiveMoves[Math.floor(Math.random() * passiveMoves.length)];
+        if (chosenMove) handleMove(chosenMove.startPos, chosenMove.endPos);
+        else endGame(PLAYERS.RED);
     }
 
     function handleBoardClick(event) {
         if (gameState.isGameOver || (gameState.gameMode === 'pvai' && gameState.currentPlayer === AI_PLAYER)) return;
         const cell = event.target.closest('.cell');
         if (!cell) return;
-        const r = parseInt(cell.dataset.row);
-        const c = parseInt(cell.dataset.col);
+        const r = parseInt(cell.dataset.row), c = parseInt(cell.dataset.col);
 
         if (selectedPieceInfo) {
             const startPos = selectedPieceInfo.piece.position;
@@ -217,20 +266,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isValidMove(startPos, endPos)) {
                 handleMove(startPos, endPos);
             }
-            selectedPieceInfo.domElement.classList.remove('selected');
-            selectedPieceInfo = null;
+            selectedPieceInfo = null; // Deselect after any move attempt
+            renderBoard(); // Re-render to remove highlight
         } else {
             const pieceData = gameState.board[r][c];
             if (pieceData && pieceData.player === gameState.currentPlayer) {
                 selectedPieceInfo = { piece: pieceData, domElement: cell.querySelector('.piece') };
-                selectedPieceInfo.domElement.classList.add('selected');
+                renderBoard(); // Re-render to add highlight
             }
         }
     }
 
-    function updateStatus(message) {
-        gameStatusArea.textContent = message;
-    }
+    function updateStatus(message) { gameStatusArea.textContent = message; }
 
     function renderBoard() {
         boardContainer.innerHTML = '';
@@ -246,10 +293,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const pieceEl = document.createElement('div');
                     pieceEl.classList.add('piece', `piece-${pieceData.player}`);
                     pieceEl.dataset.pieceId = pieceData.id;
-                    pieceEl.textContent = pieceData.name; // Debug: show name
-                    if(pieceData.id === selectedId) {
-                        pieceEl.classList.add('selected');
-                    }
+                    pieceEl.textContent = pieceData.name;
+                    if(pieceData.id === selectedId) pieceEl.classList.add('selected');
+                    if(pieceData.type === 'flag' && pieceData.revealed) pieceEl.classList.add('revealed-flag');
                     cell.appendChild(pieceEl);
                 }
                 boardContainer.appendChild(cell);
@@ -259,8 +305,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function endGame(winner) {
         gameState.isGameOver = true;
-        const winnerName = winner === 'red' ? '紅方' : '黑方';
-        updateStatus(`遊戲結束！${winnerName}獲勝！`);
+        if (winner) {
+            const winnerName = winner === 'red' ? '紅方' : '黑方';
+            updateStatus(`遊戲結束！${winnerName}獲勝！`);
+        } else {
+            updateStatus(`遊戲結束！雙方平局！`);
+        }
     }
 
     function startGame(mode) {
@@ -269,6 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentPlayer: PLAYERS.RED,
             board: Array(ROWS).fill(null).map(() => Array(COLS).fill(null)),
             capturedPieces: { [PLAYERS.RED]: [], [PLAYERS.BLACK]: [] },
+            commanderLost: { [PLAYERS.RED]: false, [PLAYERS.BLACK]: false },
             isGameOver: false,
         };
         selectedPieceInfo = null;

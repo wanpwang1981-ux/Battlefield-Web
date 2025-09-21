@@ -148,3 +148,9 @@ body {
     outline: 4px solid #3498db;
     box-shadow: 0 0 15px #3498db;
 }
+
+.piece.revealed-flag {
+    background-color: #ffeb3b !important; /* A bright yellow to make it stand out */
+    color: #000 !important;
+    border: 2px solid #fbc02d !important;
+}

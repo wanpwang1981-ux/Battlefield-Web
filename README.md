@@ -106,3 +106,13 @@ graph TD
 - `getAllPiecesForPlayer(player)`: 回傳屬於特定玩家的所有棋子。
 - `getValidMovesForPiece(piece)`: 回傳某個棋子所有可以合法移動到的目標位置。
 - `getPieceAt(position)`: 回傳某個座標上的棋子，如果該位置為空則回傳 `null`。
+
+---
+
+## 如何開始 (How to Play)
+
+本專案為純前端應用，不需啟動任何 Web Server。
+
+1.  **下載所有檔案**：將專案中所有檔案下載到您電腦的同一個資料夾中。
+2.  **用瀏覽器開啟**：直接在檔案總管中，使用網頁瀏覽器（如 Chrome, Firefox）開啟 `index.html` 檔案。
+3.  **開始遊戲**：畫面載入後即可選擇遊戲模式並開始遊玩。
