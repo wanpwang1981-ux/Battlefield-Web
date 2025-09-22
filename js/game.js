@@ -73,19 +73,33 @@ document.addEventListener('DOMContentLoaded', () => {
         return pieceSet;
     }
     function getPlayerPlacementInfo(player) {
-        const startRow = player === PLAYERS.RED ? 6 : 0;
-        const info = {
-            camp: [[startRow + 1, 1], [startRow + 1, 3], [startRow + 3, 1], [startRow + 3, 3], [startRow + 2, 2]],
-            hq: [[startRow + 5, 1], [startRow + 5, 3]],
-            backRows: [startRow + 4, startRow + 5],
-            frontRow: startRow
-        };
+        const isRed = player === PLAYERS.RED;
+        const info = {};
+
+        if (isRed) {
+            // Red player (human) is at the bottom, rows 6-11
+            const startRow = 6;
+            info.hq = [[11, 1], [11, 3]];
+            info.backRows = [10, 11];
+            info.frontRow = 6;
+            info.camp = [[7,1], [7,3], [8,2], [9,1], [9,3]];
+        } else {
+            // Black player (AI) is at the top, rows 0-5, mirrored
+            info.hq = [[0, 1], [0, 3]];
+            info.backRows = [0, 1];
+            info.frontRow = 5;
+            info.camp = [[1,1], [1,3], [2,2], [3,1], [3,3]];
+        }
+
+        // Generate all valid placement positions for the player
         let positions = [];
-        for(let r = 0; r < 6; r++){
-            for(let c = 0; c < 5; c++){
-                const pos = [startRow + r, c];
-                if(!info.camp.some(campPos => campPos[0] === pos[0] && campPos[1] === pos[1])) {
-                    positions.push(pos);
+        const playerStartRow = isRed ? 6 : 0;
+        for (let r = 0; r < 6; r++) {
+            for (let c = 0; c < 5; c++) {
+                const currentPos = [playerStartRow + r, c];
+                // Camps (行營) cannot be used for initial placement
+                if (!info.camp.some(campPos => campPos[0] === currentPos[0] && campPos[1] === currentPos[1])) {
+                    positions.push(currentPos);
                 }
             }
         }
