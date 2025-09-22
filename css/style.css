@@ -21,26 +21,6 @@ body {
     padding: 20px;
 }
 
-/* --- Game Mode Selection --- */
-#game-mode-selection {
-    text-align: center;
-    padding: 50px 0;
-}
-
-#game-mode-selection h1 {
-    margin-bottom: 30px;
-}
-
-#game-mode-selection button {
-    font-size: 1.2em;
-    padding: 10px 20px;
-    margin: 0 10px;
-    cursor: pointer;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-    background-color: #f0f0f0;
-}
-
 /* --- Main Game Screen --- */
 #header-area {
     display: flex;
@@ -51,15 +31,8 @@ body {
     margin-bottom: 15px;
 }
 
-#header-area h1 {
-    margin: 0;
-}
-
-#new-game-button {
-    font-size: 1em;
-    padding: 8px 15px;
-    cursor: pointer;
-}
+#header-area h1 { margin: 0; }
+#new-game-button { font-size: 1em; padding: 8px 15px; cursor: pointer; }
 
 #game-status-area {
     text-align: center;
@@ -71,6 +44,7 @@ body {
     border: 1px solid #ffe58f;
     color: #d46b08;
     border-radius: 5px;
+    min-height: 1.5em;
 }
 
 #main-content {
@@ -93,6 +67,7 @@ body {
     padding-bottom: 10px;
     border-bottom: 1px solid #eee;
     text-align: center;
+    font-size: 1.1em;
 }
 
 .captured-pieces {
@@ -100,17 +75,17 @@ body {
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
+    padding-top: 10px;
 }
 
 #board-container {
     flex-grow: 1;
-    max-width: 500px; /* 5 units width */
+    max-width: 500px;
     display: grid;
-    /* Grid will be fully defined by JS, this is a placeholder */
     grid-template-columns: repeat(5, 1fr);
     grid-template-rows: repeat(12, 1fr);
     border: 3px solid #555;
-    background-color: #d2b48c; /* A tan, board-like color */
+    background-color: #d2b48c;
     aspect-ratio: 5 / 12;
 }
 
@@ -132,17 +107,11 @@ body {
     color: white;
     cursor: pointer;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    user-select: none;
 }
 
-.piece-red {
-    background-color: #c0392b;
-    border: 2px solid #a03224;
-}
-
-.piece-black {
-    background-color: #2c3e50;
-    border: 2px solid #1f2c3a;
-}
+.piece-red { background-color: #c0392b; border: 2px solid #a03224; }
+.piece-black { background-color: #2c3e50; border: 2px solid #1f2c3a; }
 
 .piece.selected {
     outline: 4px solid #3498db;
@@ -150,7 +119,7 @@ body {
 }
 
 .piece.revealed-flag {
-    background-color: #ffeb3b !important; /* A bright yellow to make it stand out */
+    background-color: #ffeb3b !important;
     color: #000 !important;
     border: 2px solid #fbc02d !important;
 }
@@ -160,4 +129,17 @@ body {
     border-color: #616a6b;
     font-size: 1.5em;
     color: #ecf0f1;
+}
+
+.captured-piece-icon {
+    width: 40px;
+    height: 25px;
+    border-radius: 3px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.7em;
+    font-weight: bold;
+    color: white;
+    border: 1px solid rgba(0,0,0,0.2);
 }

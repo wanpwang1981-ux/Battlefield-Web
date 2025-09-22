@@ -1,34 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements ---
-    const gameModeSelection = document.getElementById('game-mode-selection');
-    const mainGameScreen = document.getElementById('main-game-screen');
-    const pvpButton = document.getElementById('pvp-button');
-    const pvaiButton = document.getElementById('pvai-button');
     const boardContainer = document.getElementById('board-container');
     const gameStatusArea = document.querySelector('#game-status-area p');
     const newGameButton = document.getElementById('new-game-button');
+    const capturedContainerRed = document.querySelector('#player-one-info .captured-pieces');
+    const capturedContainerBlack = document.querySelector('#player-two-info .captured-pieces');
 
     // --- Game Constants ---
     const ROWS = 12;
     const COLS = 5;
     const PLAYERS = { RED: 'red', BLACK: 'black' };
-    const HUMAN_PLAYER = PLAYERS.RED;
-    const AI_PLAYER = PLAYERS.BLACK;
-    const BOARD_SPEC = {
-        camps: [[1,1], [1,3], [2,2], [3,1], [3,3], [7,1], [7,3], [8,2], [9,1], [9,3]],
-        hqs: [[0,1], [0,3], [11,1], [11,3]],
-        railroads: [],
-    };
-    function generateRailroadSpec() {
-        const railroadSet = new Set();
-        for (let c = 0; c < COLS; c++) { [0, 5, 6, 11].forEach(r => railroadSet.add(`${r},${c}`)); }
-        for (let r = 0; r < ROWS; r++) { [0, 4].forEach(c => railroadSet.add(`${r},${c}`)); }
-        for (let r = 1; r <= 4; r++) railroadSet.add(`${r},2`);
-        for (let r = 7; r <= 10; r++) railroadSet.add(`${r},2`);
-        [[1,1],[1,3],[4,1],[4,3], [7,1],[7,3],[10,1],[10,3]].forEach(p => railroadSet.add(`${p[0]},${p[1]}`));
-        BOARD_SPEC.railroads = Array.from(railroadSet).map(s => { const [r, c] = s.split(','); return {r: parseInt(r), c: parseInt(c)}; });
-    }
-    generateRailroadSpec();
     const PIECE_SETUP = [
         { type: 'commander', count: 1 }, { type: 'army_commander', count: 1 },
         { type: 'division_commander', count: 2 }, { type: 'brigade_commander', count: 2 },
@@ -49,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Game State ---
     let gameState = {};
     let selectedPieceInfo = null;
+    let statusTimeout;
 
     // --- Helper Functions ---
     function shuffleArray(array) {
@@ -63,11 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const pieceSet = [];
         PIECE_SETUP.forEach(({ type, count }) => {
             for (let i = 0; i < count; i++) {
-                pieceSet.push({
-                    id: `${player}-${type}-${i}`, type: type, player: player,
-                    ...PIECE_DATA[type], revealed: false,
-                    position: {r: -1, c: -1}
-                });
+                pieceSet.push({ id: `${player}-${type}-${i}`, type: type, player: player, ...PIECE_DATA[type], revealed: false, position: {r: -1, c: -1} });
             }
         });
         return pieceSet;
@@ -75,29 +53,19 @@ document.addEventListener('DOMContentLoaded', () => {
     function getPlayerPlacementInfo(player) {
         const isRed = player === PLAYERS.RED;
         const info = {};
+        // Red (human) is bottom, Black is top (mirrored)
+        info.hq = isRed ? [[11, 1], [11, 3]] : [[0, 1], [0, 3]];
+        info.backRows = isRed ? [10, 11] : [0, 1];
+        info.frontRow = isRed ? 6 : 5;
+        const campRows = isRed ? [7, 8, 9] : [1, 2, 3];
+        const baseCampSpots = [[1, 1], [1, 3], [2, 2], [3, 1], [3, 3]];
+        info.camp = isRed ? baseCampSpots.map(p => [p[0] + 6, p[1]]) : baseCampSpots.map(p => [5 - p[0], p[1]]);
 
-        if (isRed) {
-            // Red player (human) is at the bottom, rows 6-11
-            const startRow = 6;
-            info.hq = [[11, 1], [11, 3]];
-            info.backRows = [10, 11];
-            info.frontRow = 6;
-            info.camp = [[7,1], [7,3], [8,2], [9,1], [9,3]];
-        } else {
-            // Black player (AI) is at the top, rows 0-5, mirrored
-            info.hq = [[0, 1], [0, 3]];
-            info.backRows = [0, 1];
-            info.frontRow = 5;
-            info.camp = [[1,1], [1,3], [2,2], [3,1], [3,3]];
-        }
-
-        // Generate all valid placement positions for the player
         let positions = [];
         const playerStartRow = isRed ? 6 : 0;
         for (let r = 0; r < 6; r++) {
             for (let c = 0; c < 5; c++) {
                 const currentPos = [playerStartRow + r, c];
-                // Camps (行營) cannot be used for initial placement
                 if (!info.camp.some(campPos => campPos[0] === currentPos[0] && campPos[1] === currentPos[1])) {
                     positions.push(currentPos);
                 }
@@ -106,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
         info.positions = positions;
         return info;
     }
-
     function placePiecesForPlayer(player) {
         let piecesToPlace = createInitialPieces(player);
         let placementInfo = getPlayerPlacementInfo(player);
@@ -117,26 +84,21 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let i = 0; i < count; i++) {
                 const pieceIndex = piecesToPlace.findIndex(p => p.type === type);
                 const piece = piecesToPlace.splice(pieceIndex, 1)[0];
-                let placed = false;
                 for (let j = 0; j < availablePositions.length; j++) {
                     const pos = availablePositions[j];
                     if (validator(pos)) {
                         piece.position = { r: pos[0], c: pos[1] };
                         gameState.board[pos[0]][pos[1]] = piece;
                         availablePositions.splice(j, 1);
-                        placed = true;
                         break;
                     }
                 }
             }
         };
 
-        // Place constrained pieces first
         placePieceType('flag', 1, (pos) => placementInfo.hq.some(p => p[0] === pos[0] && p[1] === pos[1]));
         placePieceType('landmine', 3, (pos) => placementInfo.backRows.includes(pos[0]));
         placePieceType('bomb', 2, (pos) => pos[0] !== placementInfo.frontRow);
-
-        // Place the rest of the pieces in the remaining positions
         shuffleArray(piecesToPlace);
         piecesToPlace.forEach(piece => {
             if (availablePositions.length > 0) {
@@ -146,75 +108,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
     function initializeLayout() {
         placePiecesForPlayer(PLAYERS.RED);
         placePiecesForPlayer(PLAYERS.BLACK);
     }
 
-    // --- Gameplay Functions ---
-    function isRailroad(pos) { return BOARD_SPEC.railroads.some(p => p.r === pos.r && p.c === pos.c); }
-    function isCamp(pos) { return BOARD_SPEC.camps.some(p => p.r === pos.r && p.c === pos.c); }
-    function isHq(pos) { return BOARD_SPEC.hqs.some(p => p.r === pos.r && p.c === pos.c); }
-
+    // --- Gameplay Functions (Simplified for Skirmish v2.0) ---
     function isValidMove(startPos, endPos) {
         const piece = gameState.board[startPos.r][startPos.c];
         if (!piece || piece.type === 'flag' || piece.type === 'landmine') return false;
-        if (isHq(startPos)) return false;
 
         const targetPiece = gameState.board[endPos.r][endPos.c];
         if (targetPiece && targetPiece.player === piece.player) return false;
-        if (targetPiece && isCamp(endPos)) return false;
-        if (piece.type !== 'flag' && isHq(endPos)) return false;
 
-        const dr = endPos.r - startPos.r;
-        const dc = endPos.c - startPos.c;
-        const distance = Math.abs(dr) + Math.abs(dc);
-        if (distance === 1) return true;
-
-        if (isRailroad(startPos) && isRailroad(endPos)) {
-            if (startPos.r === endPos.r || startPos.c === endPos.c) {
-                const stepR = Math.sign(dr);
-                const stepC = Math.sign(dc);
-                let pathIsClear = true;
-                for (let i = 1; i < distance; i++) {
-                    if (gameState.board[startPos.r + i * stepR][startPos.c + i * stepC]) {
-                        pathIsClear = false;
-                        break;
-                    }
-                }
-                if (pathIsClear) {
-                    if (piece.type === 'engineer') return true;
-                    if (distance <= 3) return true;
-                }
-            }
-        }
-        return false;
+        const dr = Math.abs(startPos.r - endPos.r);
+        const dc = Math.abs(startPos.c - endPos.c);
+        return (dr === 1 && dc === 0) || (dr === 0 && dc === 1);
     }
 
     function determineBattle(attacker, defender) {
         attacker.revealed = true;
         defender.revealed = true;
-        if (defender.type === 'flag') {
-            return gameState.commanderLost[attacker.player] ? { isDraw: true, isGameOver: true } : { winner: attacker, loser: defender, isGameOver: true };
-        }
-        if (attacker.type === 'bomb' || defender.type === 'bomb') return { isTie: true };
-        if (defender.type === 'landmine') {
-            return attacker.type === 'engineer' ? { winner: attacker, loser: defender } : { winner: defender, loser: attacker };
-        }
-        if (attacker.rank === defender.rank) return { isTie: true };
+        if (defender.type === 'flag') return { winner: attacker, loser: defender, isGameOver: true };
+        if (attacker.type === 'bomb' || defender.type === 'bomb') return { isTie: true, attacker, defender };
+        if (defender.type === 'landmine') return attacker.type === 'engineer' ? { winner: attacker, loser: defender } : { winner: defender, loser: attacker };
+        if (attacker.rank === defender.rank) return { isTie: true, attacker, defender };
         return attacker.rank > defender.rank ? { winner: attacker, loser: defender } : { winner: defender, loser: attacker };
-    }
-
-    function revealFlag(player) {
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                const piece = gameState.board[r][c];
-                if (piece && piece.player === player && piece.type === 'flag') {
-                    piece.revealed = true; return;
-                }
-            }
-        }
     }
 
     function handleMove(startPos, endPos) {
@@ -222,175 +141,166 @@ document.addEventListener('DOMContentLoaded', () => {
         const defender = gameState.board[endPos.r][endPos.c];
         attacker.position = endPos;
         gameState.board[startPos.r][startPos.c] = null;
+        let battleMessage = '';
+
         if (defender) {
             const result = determineBattle(attacker, defender);
+            const attackerName = `【${attacker.name}】`;
+            const defenderName = `【${defender.name}】`;
+            const attackerColor = attacker.player === 'red' ? '紅' : '黑';
+            const defenderColor = defender.player === 'red' ? '紅' : '黑';
+
             if (result.isGameOver) {
-                endGame(result.isDraw ? null : result.winner.player);
-                if (!result.isDraw) gameState.board[endPos.r][endPos.c] = result.winner;
-                renderBoard(); return;
+                gameState.board[endPos.r][endPos.c] = result.winner;
+                gameState.capturedPieces[result.winner.player].push(result.loser);
+                endGame(result.winner.player); return;
             } else if (result.isTie) {
+                battleMessage = `${attackerColor}${attackerName} 與 ${defenderColor}${defenderName} 同歸於盡！`;
                 gameState.board[endPos.r][endPos.c] = null;
-                if (attacker.type === 'commander') { gameState.commanderLost[attacker.player] = true; revealFlag(attacker.player); }
-                if (defender.type === 'commander') { gameState.commanderLost[defender.player] = true; revealFlag(defender.player); }
+                gameState.capturedPieces[attacker.player].push(defender);
+                gameState.capturedPieces[defender.player].push(attacker);
             } else if (result.winner === attacker) {
+                battleMessage = `${attackerColor}${attackerName} 吃掉 ${defenderColor}${defenderName}！`;
                 gameState.board[endPos.r][endPos.c] = attacker;
-                if (result.loser.type === 'commander') { gameState.commanderLost[result.loser.player] = true; revealFlag(result.loser.player); }
+                gameState.capturedPieces[attacker.player].push(defender);
             } else {
+                battleMessage = `${defenderColor}${defenderName} 吃掉 ${attackerColor}${attackerName}！`;
                 gameState.board[endPos.r][endPos.c] = defender;
-                 if (result.loser.type === 'commander') { gameState.commanderLost[result.loser.player] = true; revealFlag(result.loser.player); }
+                gameState.capturedPieces[defender.player].push(attacker);
             }
         } else {
             gameState.board[endPos.r][endPos.c] = attacker;
         }
-        switchPlayer();
+        switchPlayer(battleMessage);
     }
 
     function hasLegalMoves(player) {
-        for (let r1 = 0; r1 < ROWS; r1++) {
-            for (let c1 = 0; c1 < COLS; c1++) {
-                const piece = gameState.board[r1][c1];
-                if (piece && piece.player === player) {
-                    const startPos = { r: r1, c: c1 };
-                    for (let r2 = 0; r2 < ROWS; r2++) {
-                        for (let c2 = 0; c2 < COLS; c2++) {
-                            if (r1 === r2 && c1 === c2) continue;
-                            if (isValidMove(startPos, { r: r2, c: c2 })) return true;
-                        }
-                    }
-                }
+        for (let r1 = 0; r1 < ROWS; r1++) { for (let c1 = 0; c1 < COLS; c1++) {
+            if (gameState.board[r1][c1]?.player === player) {
+                for (let r2 = 0; r2 < ROWS; r2++) { for (let c2 = 0; c2 < COLS; c2++) {
+                    if ((r1 !== r2 || c1 !== c2) && isValidMove({ r: r1, c: c1 }, { r: r2, c: c2 })) return true;
+                }}
             }
-        }
+        }}
         return false;
     }
 
-    function switchPlayer() {
+    function switchPlayer(battleMessage = '') {
         if (gameState.isGameOver) return;
         gameState.currentPlayer = gameState.currentPlayer === PLAYERS.RED ? PLAYERS.BLACK : PLAYERS.RED;
-        updateStatus(`輪到 ${gameState.currentPlayer === 'red' ? '紅方' : '黑方'} 行動`);
         renderBoard();
         if (!hasLegalMoves(gameState.currentPlayer)) {
             const winner = gameState.currentPlayer === PLAYERS.RED ? PLAYERS.BLACK : PLAYERS.RED;
-            endGame(winner); return;
+            endGame(winner, '無子可動'); return;
         }
-        if (gameState.gameMode === 'pvai' && gameState.currentPlayer === AI_PLAYER) {
-            setTimeout(triggerAIMove, 1000);
+        const turnMessage = `輪到 ${gameState.currentPlayer === 'red' ? '紅方' : '黑方'} 行動`;
+        if(battleMessage) {
+            updateStatus(battleMessage, 2000, turnMessage);
+        } else {
+            updateStatus(turnMessage);
         }
-    }
-
-    function triggerAIMove() {
-        if (gameState.isGameOver) return;
-        const attackMoves = [], passiveMoves = [];
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                const piece = gameState.board[r][c];
-                if (piece && piece.player === AI_PLAYER) {
-                    const startPos = { r, c };
-                    for (let r2 = 0; r2 < ROWS; r2++) {
-                        for (let c2 = 0; c2 < COLS; c2++) {
-                            if (r === r2 && c === c2) continue;
-                            const endPos = { r: r2, c: c2 };
-                            if (isValidMove(startPos, endPos)) {
-                                const move = { startPos, endPos };
-                                const target = gameState.board[endPos.r][endPos.c];
-                                if (target && target.player !== AI_PLAYER) attackMoves.push(move);
-                                else passiveMoves.push(move);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        let chosenMove = null;
-        if (attackMoves.length > 0) chosenMove = attackMoves[Math.floor(Math.random() * attackMoves.length)];
-        else if (passiveMoves.length > 0) chosenMove = passiveMoves[Math.floor(Math.random() * passiveMoves.length)];
-        if (chosenMove) handleMove(chosenMove.startPos, chosenMove.endPos);
     }
 
     function handleBoardClick(event) {
-        if (gameState.isGameOver || (gameState.gameMode === 'pvai' && gameState.currentPlayer === AI_PLAYER)) return;
+        if (gameState.isGameOver) return;
         const cell = event.target.closest('.cell');
         if (!cell) return;
         const r = parseInt(cell.dataset.row), c = parseInt(cell.dataset.col);
         if (selectedPieceInfo) {
             const startPos = selectedPieceInfo.piece.position;
             const endPos = { r, c };
-            if (isValidMove(startPos, endPos)) {
-                handleMove(startPos, endPos);
-            }
+            if (isValidMove(startPos, endPos)) handleMove(startPos, endPos);
             selectedPieceInfo = null;
-            renderBoard();
+            if(!gameState.isGameOver) renderBoard();
         } else {
             const pieceData = gameState.board[r][c];
-            if (pieceData && pieceData.player === gameState.currentPlayer) {
-                selectedPieceInfo = { piece: pieceData, domElement: cell.querySelector('.piece') };
+            if (pieceData?.player === gameState.currentPlayer) {
+                selectedPieceInfo = { piece: pieceData };
                 renderBoard();
             }
         }
     }
 
-    function updateStatus(message) { gameStatusArea.textContent = message; }
+    function updateStatus(message, duration = 0, nextMessage = '') {
+        clearTimeout(statusTimeout);
+        gameStatusArea.textContent = message;
+        if (duration > 0) {
+            statusTimeout = setTimeout(() => {
+                updateStatus(nextMessage || `輪到 ${gameState.currentPlayer === 'red' ? '紅方' : '黑方'} 行動`);
+            }, duration);
+        }
+    }
+
+    function renderCapturedPieces() {
+        capturedContainerRed.innerHTML = '';
+        capturedContainerBlack.innerHTML = '';
+        const renderIcons = (container, pieces, colorClass) => {
+            pieces.sort((a,b) => b.rank - a.rank).forEach(piece => {
+                const icon = document.createElement('div');
+                icon.className = `captured-piece-icon ${colorClass}`;
+                icon.textContent = piece.name;
+                container.appendChild(icon);
+            });
+        };
+        renderIcons(capturedContainerRed, gameState.capturedPieces.black, 'piece-red');
+        renderIcons(capturedContainerBlack, gameState.capturedPieces.red, 'piece-black');
+    }
 
     function renderBoard() {
         boardContainer.innerHTML = '';
-        const selectedId = selectedPieceInfo ? selectedPieceInfo.piece.id : null;
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                const cell = document.createElement('div');
-                cell.classList.add('cell');
-                cell.dataset.row = r;
-                cell.dataset.col = c;
-                const pieceData = gameState.board[r][c];
-                if (pieceData) {
-                    const pieceEl = document.createElement('div');
-                    pieceEl.classList.add('piece', `piece-${pieceData.player}`);
-                    pieceEl.dataset.pieceId = pieceData.id;
-                    const canSee = pieceData.player === HUMAN_PLAYER || pieceData.revealed;
-                    if (canSee) {
-                        pieceEl.textContent = pieceData.name;
-                        if(pieceData.type === 'flag' && pieceData.revealed) pieceEl.classList.add('revealed-flag');
-                    } else {
-                        pieceEl.textContent = '棋';
-                        pieceEl.classList.add('unrevealed');
-                    }
-                    if(pieceData.id === selectedId) pieceEl.classList.add('selected');
-                    cell.appendChild(pieceEl);
+        const selectedId = selectedPieceInfo?.piece.id;
+        for (let r = 0; r < ROWS; r++) { for (let c = 0; c < COLS; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = r; cell.dataset.col = c;
+            const pieceData = gameState.board[r][c];
+            if (pieceData) {
+                const pieceEl = document.createElement('div');
+                pieceEl.className = `piece piece-${pieceData.player}`;
+                const isCurrentPlayer = pieceData.player === gameState.currentPlayer;
+                const canSee = isCurrentPlayer || pieceData.revealed;
+                if (canSee) {
+                    pieceEl.textContent = pieceData.name;
+                } else {
+                    pieceEl.textContent = '棋';
+                    pieceEl.classList.add('unrevealed');
                 }
-                boardContainer.appendChild(cell);
+                if (pieceData.id === selectedId) pieceEl.classList.add('selected');
+                cell.appendChild(pieceEl);
             }
-        }
+            boardContainer.appendChild(cell);
+        }}
+        renderCapturedPieces();
     }
-    function endGame(winner) {
+
+    function endGame(winner, reason = '奪得軍旗') {
         gameState.isGameOver = true;
+        let message;
         if (winner) {
             const winnerName = winner === 'red' ? '紅方' : '黑方';
-            updateStatus(`遊戲結束！${winnerName}獲勝！`);
+            message = `遊戲結束！${winnerName}獲勝！(${reason})`;
         } else {
-            updateStatus(`遊戲結束！雙方平局！`);
+            message = `遊戲結束！雙方平局！`;
         }
+        updateStatus(message);
     }
-    function startGame(mode) {
+
+    function startGame() {
         gameState = {
-            gameMode: mode,
             currentPlayer: PLAYERS.RED,
             board: Array(ROWS).fill(null).map(() => Array(COLS).fill(null)),
             capturedPieces: { [PLAYERS.RED]: [], [PLAYERS.BLACK]: [] },
-            commanderLost: { [PLAYERS.RED]: false, [PLAYERS.BLACK]: false },
             isGameOver: false,
         };
         selectedPieceInfo = null;
-        gameModeSelection.style.display = 'none';
-        mainGameScreen.style.display = 'block';
         updateStatus(`輪到 ${gameState.currentPlayer === 'red' ? '紅方' : '黑方'} 行動`);
         initializeLayout();
         renderBoard();
     }
 
-    // --- Event Listeners ---
-    pvpButton.addEventListener('click', () => startGame('pvp'));
-    pvaiButton.addEventListener('click', () => startGame('pvai'));
-    newGameButton.addEventListener('click', () => {
-        mainGameScreen.style.display = 'none';
-        gameModeSelection.style.display = 'block';
-    });
+    newGameButton.addEventListener('click', startGame);
     boardContainer.addEventListener('click', handleBoardClick);
+
+    // Initial game start
+    startGame();
 });
