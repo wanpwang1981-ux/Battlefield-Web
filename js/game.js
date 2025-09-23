@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pvaiButton = document.getElementById('pvai-button');
     const easyAIButton = document.getElementById('easy-ai-button');
     const normalAIButton = document.getElementById('normal-ai-button');
+    const hardAIButton = document.getElementById('hard-ai-button');
     const backToModeSelectionButton = document.getElementById('back-to-mode-selection');
     const gameArea = document.getElementById('game-area');
     const boardElement = document.getElementById('board');
@@ -73,6 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     normalAIButton.addEventListener('click', () => {
         gameState.difficulty = 'normal';
+        startGame('pvai');
+    });
+
+    hardAIButton.addEventListener('click', () => {
+        gameState.difficulty = 'hard';
         startGame('pvai');
     });
 
@@ -644,7 +650,9 @@ document.addEventListener('DOMContentLoaded', () => {
      * 根據遊戲難度，呼叫對應的 AI 函式。
      */
     function executeAITurn() {
-        if (gameState.difficulty === 'normal') {
+        if (gameState.difficulty === 'hard') {
+            executeHardAITurn();
+        } else if (gameState.difficulty === 'normal') {
             executeNormalAITurn();
         } else {
             executeEasyAITurn();
@@ -839,5 +847,178 @@ document.addEventListener('DOMContentLoaded', () => {
             return { winner: 'defender' };
         }
         return { winner: 'tie' };
+    }
+
+    /**
+     * 評估當前棋盤狀態的分數（從 AI/黑方的角度）。
+     * @param {Array<Array<Object>>} board - 要評估的棋盤狀態。
+     * @returns {number} 棋盤的分數。
+     */
+    function evaluateBoard(board) {
+        let score = 0;
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const piece = board[r][c];
+                if (piece) {
+                    // 分數 = AI棋子總分 - 玩家棋子總分
+                    // 棋子的基礎分是其階級的平方，以放大高階棋子的價值。
+                    const pieceScore = piece.rank * piece.rank;
+                    if (piece.player === PLAYERS.BLACK) {
+                        score += pieceScore;
+                    } else {
+                        // 只計算已知的玩家棋子，未知的棋子對 AI 來說沒有直接的負價值。
+                        if (piece.revealed) {
+                            score -= pieceScore;
+                        }
+                    }
+                }
+            }
+        }
+        return score;
+    }
+
+    /**
+     * Minimax 演算法，帶有 Alpha-Beta 剪枝優化。
+     * @param {Array<Array<Object>>} board - 要評估的棋盤。
+     * @param {number} depth - 搜尋深度。
+     * @param {boolean} isMaximizing - 目前是最大化（AI）還是最小化（玩家）節點。
+     * @param {number} alpha - Alpha-Beta 剪枝的 Alpha 值。
+     * @param {number} beta - Alpha-Beta 剪枝的 Beta 值。
+     * @returns {number} 該節點的最佳分數。
+     */
+    function minimax(board, depth, isMaximizing, alpha, beta) {
+        if (depth === 0) {
+            return evaluateBoard(board);
+        }
+
+        const player = isMaximizing ? PLAYERS.BLACK : PLAYERS.RED;
+        const allMoves = getAllMovesForPlayer(board, player);
+
+        if (allMoves.length === 0) {
+            return evaluateBoard(board);
+        }
+
+        if (isMaximizing) {
+            let maxEval = -Infinity;
+            for (const move of allMoves) {
+                const newBoard = applySimulatedMove(board, move);
+                const evaluation = minimax(newBoard, depth - 1, false, alpha, beta);
+                maxEval = Math.max(maxEval, evaluation);
+                alpha = Math.max(alpha, evaluation);
+                if (beta <= alpha) {
+                    break; // Beta cut-off
+                }
+            }
+            return maxEval;
+        } else { // Minimizing player
+            let minEval = +Infinity;
+            for (const move of allMoves) {
+                const newBoard = applySimulatedMove(board, move);
+                const evaluation = minimax(newBoard, depth - 1, true, alpha, beta);
+                minEval = Math.min(minEval, evaluation);
+                beta = Math.min(beta, evaluation);
+                if (beta <= alpha) {
+                    break; // Alpha cut-off
+                }
+            }
+            return minEval;
+        }
+    }
+
+    /**
+     * 獲取指定玩家在給定棋盤上的所有合法移動。
+     * @param {Array<Array<Object>>} board - 棋盤狀態。
+     * @param {string} player - 玩家。
+     * @returns {Array<Object>} 所有合法移動的列表。
+     */
+    function getAllMovesForPlayer(board, player) {
+        const allMoves = [];
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const piece = board[r][c];
+                if (piece && piece.player === player && piece.type !== 'flag' && piece.type !== 'landmine') {
+                    // This is a simplified getValidMoves for the simulation
+                    const directions = [{ r: -1, c: 0 }, { r: 1, c: 0 }, { r: 0, c: -1 }, { r: 0, c: 1 }];
+                    for (const dir of directions) {
+                        const newR = r + dir.r;
+                        const newC = c + dir.c;
+                        if (newR >= 0 && newR < ROWS && newC >= 0 && newC < COLS) {
+                            const target = board[newR][newC];
+                            if (!target || target.player !== player) {
+                                allMoves.push({ from: { r, c }, to: { r: newR, c: newC }, piece });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return allMoves;
+    }
+
+    /**
+     * 在一個模擬的棋盤上應用一個移動，並返回新的棋盤狀態。
+     * @param {Array<Array<Object>>} board - 原始棋盤。
+     * @param {Object} move - 要應用的移動。
+     * @returns {Array<Array<Object>>} 應用移動後的新棋盤。
+     */
+    function applySimulatedMove(board, move) {
+        const newBoard = JSON.parse(JSON.stringify(board)); // Deep copy
+        const attacker = newBoard[move.from.r][move.from.c];
+        const defender = newBoard[move.to.r][move.to.c];
+
+        if (defender) {
+            const combatResult = simulateCombat(attacker, defender);
+            attacker.revealed = true;
+            defender.revealed = true;
+            newBoard[move.from.r][move.from.c] = null;
+            if (combatResult.winner === 'attacker') {
+                newBoard[move.to.r][move.to.c] = attacker;
+            } else if (combatResult.winner === 'defender') {
+                // Attacker is removed, defender stays
+            } else { // Tie
+                newBoard[move.to.r][move.to.c] = null;
+            }
+        } else {
+            newBoard[move.to.r][move.to.c] = attacker;
+            newBoard[move.from.r][move.from.c] = null;
+        }
+        return newBoard;
+    }
+
+    /**
+     * 困難難度 AI：使用 Minimax 演算法找出最佳移動。
+     */
+    function executeHardAITurn() {
+        if (gameState.gameOver) return;
+
+        const allMoves = getAllMovesForPlayer(gameState.boardState, PLAYERS.BLACK);
+
+        if (allMoves.length === 0) {
+            checkWinCondition();
+            return;
+        }
+
+        let bestScore = -Infinity;
+        let bestMoves = [];
+        const depth = 2; // 搜尋深度。注意：增加此值會大幅增加計算時間。
+
+        for (const move of allMoves) {
+            const newBoard = applySimulatedMove(gameState.boardState, move);
+            // 我們是 Maximizing player，所以下一步是 Minimizing player
+            const score = minimax(newBoard, depth - 1, false, -Infinity, +Infinity);
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestMoves = [move];
+            } else if (score === bestScore) {
+                bestMoves.push(move);
+            }
+        }
+
+        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+
+        if (chosenMove) {
+            movePiece(chosenMove.from.r, chosenMove.from.c, chosenMove.to.r, chosenMove.to.c);
+        }
     }
 });
