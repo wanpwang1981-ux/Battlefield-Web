@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusBarElement = document.getElementById('status-bar');
     const gameLogElement = document.getElementById('game-log');
     const resetButton = document.getElementById('reset-button');
+    const downloadLogButton = document.getElementById('download-log-button');
     const capturedRedElement = document.getElementById('captured-red').querySelector('.pieces');
     const capturedBlackElement = document.getElementById('captured-black').querySelector('.pieces');
 
@@ -82,8 +83,22 @@ document.addEventListener('DOMContentLoaded', () => {
     resetButton.addEventListener('click', () => {
         // 重置遊戲，返回模式選擇畫面
         modeSelection.classList.remove('hidden');
+        difficultySelection.classList.add('hidden');
         gameArea.classList.add('hidden');
         resetGameState();
+    });
+
+    downloadLogButton.addEventListener('click', () => {
+        const logText = gameLogElement.innerText;
+        const blob = new Blob([logText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `luzhanqi_log_${new Date().toISOString()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     });
 
     /**

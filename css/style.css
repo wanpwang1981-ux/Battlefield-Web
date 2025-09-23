@@ -149,11 +149,15 @@ body {
 }
 
 /* --- 按鈕 --- */
-#reset-button {
+#control-buttons {
     margin-top: 15px;
+}
+
+#reset-button, #download-log-button {
     padding: 10px 20px;
     font-size: 1em;
     cursor: pointer;
+    margin: 0 10px;
 }
 
 /* --- 特殊棋盤格樣式 (大本營、行營) --- */
