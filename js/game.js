@@ -681,38 +681,68 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * 普通難度 AI：使用評分系統選擇最佳移動。
+     * 普通難度 AI：使用評分系統和防禦邏輯選擇最佳移動。
      */
     function executeNormalAITurn() {
         if (gameState.gameOver) return;
 
-        let allMoves = [];
-        // 1. 找出所有可能的移動
+        // --- 1. 防禦邏輯：檢查是否有高價值棋子受到威脅 ---
+        const highValuePieces = ['field_marshal', 'general', 'major_general', 'brigadier'];
+        const myPieces = [];
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 const piece = gameState.boardState[r][c];
-                if (piece && piece.player === PLAYERS.BLACK && piece.type !== 'flag' && piece.type !== 'landmine') {
-                    const validMoves = getValidMoves(r, c);
-                    validMoves.forEach(move => {
-                        allMoves.push({
-                            from: { r, c },
-                            to: move,
-                            piece: piece
-                        });
-                    });
+                if (piece && piece.player === PLAYERS.BLACK) {
+                    myPieces.push({ piece, r, c });
                 }
             }
         }
+
+        for (const myPiece of myPieces) {
+            if (!highValuePieces.includes(myPiece.piece.type)) continue;
+
+            const directions = [{ r: -1, c: 0 }, { r: 1, c: 0 }, { r: 0, c: -1 }, { r: 0, c: 1 }];
+            for (const dir of directions) {
+                const enemyR = myPiece.r + dir.r;
+                const enemyC = myPiece.c + dir.c;
+
+                if (enemyR >= 0 && enemyR < ROWS && enemyC >= 0 && enemyC < COLS) {
+                    const enemyPiece = gameState.boardState[enemyR][enemyC];
+                    if (enemyPiece && enemyPiece.player === PLAYERS.RED && enemyPiece.revealed) {
+                        const combatResult = simulateCombat(enemyPiece, myPiece.piece);
+                        if (combatResult.winner === 'attacker') { // 'attacker' is the player piece
+                            // 威脅存在！立即尋找逃跑路線
+                            const escapeMoves = getValidMoves(myPiece.r, myPiece.c).filter(move => !gameState.boardState[move.r][move.c]);
+                            if (escapeMoves.length > 0) {
+                                const escapeMove = escapeMoves[Math.floor(Math.random() * escapeMoves.length)];
+                                logAction(`AI: ${myPiece.piece.name} 偵測到威脅，緊急撤離！`);
+                                movePiece(myPiece.r, myPiece.c, escapeMove.r, escapeMove.c);
+                                return; // 執行防禦移動後結束回合
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 2. 若無立即危險，則執行攻擊/移動評分邏輯 ---
+        let allMoves = [];
+        myPieces.forEach(p => {
+            if (p.piece.type !== 'flag' && p.piece.type !== 'landmine') {
+                const validMoves = getValidMoves(p.r, p.c);
+                validMoves.forEach(move => {
+                    allMoves.push({ from: { r: p.r, c: p.c }, to: move, piece: p.piece });
+                });
+            }
+        });
 
         if (allMoves.length === 0) {
             checkWinCondition();
             return;
         }
 
-        // 2. 為每個移動評分
         let bestScore = -Infinity;
         let bestMoves = [];
-
         allMoves.forEach(move => {
             const score = getMoveScore(move);
             if (score > bestScore) {
@@ -723,7 +753,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 3. 從最高分的移動中隨機選擇一個來執行
         const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
 
         if (chosenMove) {
@@ -742,31 +771,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- 攻擊性移動評分 ---
         if (defender) {
-            // 如果攻擊的是未知的棋子，給予一個較低的基礎分，鼓勵試探
+            // 攻擊一個未知的棋子：給予一個較低的正分，鼓勵用低階棋子試探。
             if (!defender.revealed) {
-                // 用低階棋子試探的價值更高
+                // 分數 = 5 - 攻擊方階級。 (工兵 rank 3 -> 得 2 分, 司令 rank 11 -> 得 -6 分)
                 return 5 - attacker.rank;
             }
 
+            // 攻擊一個已知的棋子：模擬戰鬥結果來評分。
             const combatResult = simulateCombat(attacker, defender);
+
+            // 贏：非常高的分數。吃掉對方越高階的棋子，分數越高。
             if (combatResult.winner === 'attacker') {
-                // 獲勝的分數：基礎分 100 + 被吃掉棋子的階級 * 10
                 return 100 + (defender.rank * 10);
             }
+            // 平手：中等分數。用低階棋子換掉對方棋子比較划算。
             if (combatResult.winner === 'tie') {
-                // 同歸於盡的分數：基礎分 50 - 自己棋子的階級 (用低階棋兌子更划算)
                 return 50 - attacker.rank;
             }
+            // 輸：非常低的負分，強力避免此類移動。
             if (combatResult.winner === 'defender') {
-                // 失敗的分數：負分，避免自殺式攻擊
                 return -100 - attacker.rank;
             }
         }
 
         // --- 非攻擊性移動評分 ---
-        let score = 0;
-        // 鼓勵向前移動 (AI 是黑方，往下走是向前)
-        score += (move.to.r - move.from.r);
+        // 基礎分為 0，鼓勵向前移動（對黑方來說，r 座標增加即為向前）。
+        let score = (move.to.r - move.from.r);
         return score;
     }
 
@@ -786,10 +816,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (defender.type === 'landmine') {
             return attacker.type === 'engineer' ? { winner: 'attacker' } : { winner: 'defender' };
         }
-        if (attacker.rank > defender.rank) {
+        // 使用 Number() 確保進行的是數值比較
+        if (Number(attacker.rank) > Number(defender.rank)) {
             return { winner: 'attacker' };
         }
-        if (attacker.rank < defender.rank) {
+        if (Number(attacker.rank) < Number(defender.rank)) {
             return { winner: 'defender' };
         }
         return { winner: 'tie' };
