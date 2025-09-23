@@ -635,8 +635,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 4. 執行選擇的走法
         if (chosenMove) {
-            // 在移動前先將 AI 棋子設為 revealed，這樣玩家才能看到 AI 動了什麼棋
-            gameState.boardState[chosenMove.from.r][chosenMove.from.c].revealed = true;
+            // 根據新的遊戲規則，AI 移動時不再主動揭露棋子身份。
+            // 棋子只在戰鬥中被揭露。
             movePiece(chosenMove.from.r, chosenMove.from.c, chosenMove.to.r, chosenMove.to.c);
         } else {
             // 如果 AI 無棋可走，觸發勝利/失敗檢查
