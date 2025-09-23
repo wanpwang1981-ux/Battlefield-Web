@@ -6,8 +6,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOM 元素參考 ---
     // 透過 getElementById 獲取所有需要的 HTML 元素，方便後續操作。
     const modeSelection = document.getElementById('mode-selection');
+    const difficultySelection = document.getElementById('difficulty-selection');
     const pvpButton = document.getElementById('pvp-button');
     const pvaiButton = document.getElementById('pvai-button');
+    const easyAIButton = document.getElementById('easy-ai-button');
+    const normalAIButton = document.getElementById('normal-ai-button');
+    const backToModeSelectionButton = document.getElementById('back-to-mode-selection');
     const gameArea = document.getElementById('game-area');
     const boardElement = document.getElementById('board');
     const playerTurnElement = document.getElementById('player-turn');
@@ -42,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 使用一個物件來儲存所有遊戲相關的狀態，方便管理和追蹤。
     let gameState = {
         gameMode: null,      // 遊戲模式: 'pvp' 或 'pvai'
+        difficulty: 'easy',  // AI 難度: 'easy' 或 'normal'
         currentPlayer: null, // 當前玩家: 'red' 或 'black'
         selectedPiece: null, // 當前選中的棋子: { piece, row, col }
         boardState: [],      // 棋盤狀態: 一個二維陣列，儲存每個格子的棋子資訊
@@ -54,7 +59,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 事件監聽器 ---
     pvpButton.addEventListener('click', () => startGame('pvp'));
-    pvaiButton.addEventListener('click', () => startGame('pvai'));
+
+    pvaiButton.addEventListener('click', () => {
+        modeSelection.classList.add('hidden');
+        difficultySelection.classList.remove('hidden');
+    });
+
+    easyAIButton.addEventListener('click', () => {
+        gameState.difficulty = 'easy';
+        startGame('pvai');
+    });
+
+    normalAIButton.addEventListener('click', () => {
+        gameState.difficulty = 'normal';
+        startGame('pvai');
+    });
+
+    backToModeSelectionButton.addEventListener('click', () => {
+        difficultySelection.classList.add('hidden');
+        modeSelection.classList.remove('hidden');
+    });
     resetButton.addEventListener('click', () => {
         // 重置遊戲，返回模式選擇畫面
         modeSelection.classList.remove('hidden');
@@ -602,8 +626,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * AI 的主要邏輯，決定並執行一步棋。
+     * 根據遊戲難度，呼叫對應的 AI 函式。
      */
     function executeAITurn() {
+        if (gameState.difficulty === 'normal') {
+            executeNormalAITurn();
+        } else {
+            executeEasyAITurn();
+        }
+    }
+
+    /**
+     * 簡單難度 AI：隨機選擇可行的攻擊或移動。
+     */
+    function executeEasyAITurn() {
         if (gameState.gameOver) return;
 
         const allMoves = [];
@@ -642,5 +678,120 @@ document.addEventListener('DOMContentLoaded', () => {
             // 如果 AI 無棋可走，觸發勝利/失敗檢查
             checkWinCondition();
         }
+    }
+
+    /**
+     * 普通難度 AI：使用評分系統選擇最佳移動。
+     */
+    function executeNormalAITurn() {
+        if (gameState.gameOver) return;
+
+        let allMoves = [];
+        // 1. 找出所有可能的移動
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const piece = gameState.boardState[r][c];
+                if (piece && piece.player === PLAYERS.BLACK && piece.type !== 'flag' && piece.type !== 'landmine') {
+                    const validMoves = getValidMoves(r, c);
+                    validMoves.forEach(move => {
+                        allMoves.push({
+                            from: { r, c },
+                            to: move,
+                            piece: piece
+                        });
+                    });
+                }
+            }
+        }
+
+        if (allMoves.length === 0) {
+            checkWinCondition();
+            return;
+        }
+
+        // 2. 為每個移動評分
+        let bestScore = -Infinity;
+        let bestMoves = [];
+
+        allMoves.forEach(move => {
+            const score = getMoveScore(move);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMoves = [move];
+            } else if (score === bestScore) {
+                bestMoves.push(move);
+            }
+        });
+
+        // 3. 從最高分的移動中隨機選擇一個來執行
+        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+
+        if (chosenMove) {
+            movePiece(chosenMove.from.r, chosenMove.from.c, chosenMove.to.r, chosenMove.to.c);
+        }
+    }
+
+    /**
+     * 評估一個移動的分數。
+     * @param {Object} move - 要評估的移動 { from, to, piece }。
+     * @returns {number} 該移動的分數。
+     */
+    function getMoveScore(move) {
+        const attacker = move.piece;
+        const defender = gameState.boardState[move.to.r][move.to.c];
+
+        // --- 攻擊性移動評分 ---
+        if (defender) {
+            // 如果攻擊的是未知的棋子，給予一個較低的基礎分，鼓勵試探
+            if (!defender.revealed) {
+                // 用低階棋子試探的價值更高
+                return 5 - attacker.rank;
+            }
+
+            const combatResult = simulateCombat(attacker, defender);
+            if (combatResult.winner === 'attacker') {
+                // 獲勝的分數：基礎分 100 + 被吃掉棋子的階級 * 10
+                return 100 + (defender.rank * 10);
+            }
+            if (combatResult.winner === 'tie') {
+                // 同歸於盡的分數：基礎分 50 - 自己棋子的階級 (用低階棋兌子更划算)
+                return 50 - attacker.rank;
+            }
+            if (combatResult.winner === 'defender') {
+                // 失敗的分數：負分，避免自殺式攻擊
+                return -100 - attacker.rank;
+            }
+        }
+
+        // --- 非攻擊性移動評分 ---
+        let score = 0;
+        // 鼓勵向前移動 (AI 是黑方，往下走是向前)
+        score += (move.to.r - move.from.r);
+        return score;
+    }
+
+    /**
+     * 模擬戰鬥以預測結果，不會真的改變遊戲狀態。
+     * @param {Object} attacker
+     * @param {Object} defender
+     * @returns {Object} 一個描述模擬戰鬥結果的物件 { winner }。
+     */
+    function simulateCombat(attacker, defender) {
+        if (attacker.type === 'bomb' || defender.type === 'bomb') {
+            return { winner: 'tie' };
+        }
+        if (defender.type === 'flag') {
+            return { winner: 'attacker' };
+        }
+        if (defender.type === 'landmine') {
+            return attacker.type === 'engineer' ? { winner: 'attacker' } : { winner: 'defender' };
+        }
+        if (attacker.rank > defender.rank) {
+            return { winner: 'attacker' };
+        }
+        if (attacker.rank < defender.rank) {
+            return { winner: 'defender' };
+        }
+        return { winner: 'tie' };
     }
 });

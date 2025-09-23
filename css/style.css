@@ -17,11 +17,19 @@ body {
 }
 
 /* --- 遊戲模式選擇 --- */
-#mode-selection button {
+#mode-selection button, #difficulty-selection button {
     font-size: 1.2em;
     padding: 10px 20px;
     margin: 10px;
     cursor: pointer;
+}
+
+#difficulty-selection button#back-to-mode-selection {
+    font-size: 0.9em;
+    padding: 5px 10px;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    margin-top: 20px;
 }
 
 /* --- 通用工具 --- */
