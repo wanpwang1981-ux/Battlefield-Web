@@ -800,11 +800,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 return 100 + (defender.rank * 10);
             }
             // 平手：中等分數。用低階棋子換掉對方棋子比較划算。
-            if (combatResult.winner === 'tie') {
+            else if (combatResult.winner === 'tie') {
                 return 50 - attacker.rank;
             }
             // 輸：非常低的負分，強力避免此類移動。
-            if (combatResult.winner === 'defender') {
+            else { // combatResult.winner === 'defender'
                 return -100 - attacker.rank;
             }
         }
