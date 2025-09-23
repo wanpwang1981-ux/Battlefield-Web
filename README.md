@@ -1,27 +1,30 @@
-# 陸軍棋 (v2.1)
+# 陸軍棋 v2.2 (Lu Zhan Qi)
 
-這是一個基於網頁的陸軍棋遊戲，在穩定的「前哨戰」v2.0版本基礎上，新增了電腦對戰(PvAI)功能。
+This is a web-based implementation of the Chinese board game Lu Zhan Qi (also known as Land Battle Chess). The game is built using vanilla HTML, CSS, and JavaScript, with no external libraries or frameworks.
 
-## 版本特色 (v2.1)
+## How to Play
 
-*   **遊戲模式**:
-    *   玩家對戰 (Player vs. Player)
-    *   電腦對戰 (Player vs. AI) - AI採用「攻擊優先」的簡單策略。
-*   **核心規則**:
-    *   **秘密佈陣 (`暗棋`)**: 遊戲開始時，你無法看到對手的棋子佈局。棋子只在戰鬥後揭示。
-    *   **標準戰鬥**: 遵循「司令 > 軍長 > ...」的軍階規則，炸彈同歸於盡，工兵可勝地雷。
-    *   **正確佈局**: 棋子佈局嚴格遵守規則（軍旗在大本營，地雷在後兩排等），且雙方佈局為鏡像對稱。
-*   **簡化規則**:
-    *   **移動**: 所有可移動棋子僅能向相鄰的上下左右格子移動一格。**此版本不包含鐵路規則**。
-    *   **特殊地形**: **此版本不包含「行營」的保護規則**。
+1.  Clone or download this repository.
+2.  Open the `index.html` file in a modern web browser (like Chrome, Firefox, or Edge).
+3.  The game will load, and you can start playing immediately.
 
-## 如何開始 (How to Play)
+## Features
 
-本專案為純前端應用，不需啟動任何 Web Server。
+-   **Two Game Modes**: Choose between Player-vs-Player (PvP) for hot-seat play or Player-vs-AI (PvAI) to challenge the computer.
+-   **Secret Random Deployment**: Pieces are randomly placed on the board at the start of each game, following the official placement rules.
+-   **Full Game UI**: Includes a game log, status bar, and display for captured pieces.
+-   **Complete Ruleset**: Implements all standard combat rules, including special interactions for Bombs, Landmines, and Engineers.
+-   **Basic AI**: The computer opponent will prioritize attacks but will make random moves otherwise.
 
-1.  **下載所有檔案**：將專案中所有檔案下載到您電腦的同一個資料夾中。
-2.  **用瀏覽器開啟**：直接在檔案總管中，使用網頁瀏覽器（如 Chrome, Firefox）開啟 `index.html` 檔案。
-3.  **開始遊戲**：遊戲會直接開始一個新的對局。
+## Core Game Rules
 
----
-*這個版本是作為未來更完整功能的穩定基礎。*
+-   **Objective**: Capture the enemy's Flag (軍旗).
+-   **Movement**: All pieces (except the Flag and Landmines) can move one space up, down, left, or right.
+-   **Combat**:
+    -   Higher rank pieces capture lower rank pieces.
+    -   Pieces of the same rank are both eliminated.
+    -   **Bombs (炸彈)**: Eliminate any piece they attack or are attacked by.
+    -   **Landmines (地雷)**: Eliminate any piece that attacks them, except for the Engineer. Landmines do not move.
+    -   **Engineers (工兵)**: Are the only pieces that can capture Landmines.
+-   **Winning**: You win by capturing the enemy Flag or if your opponent has no legal moves left.
+-   **Losing**: You lose if your Flag is captured or if you have no legal moves on your turn.
