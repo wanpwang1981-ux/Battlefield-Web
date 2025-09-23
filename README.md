@@ -1,30 +1,34 @@
-# 陸軍棋 v2.2 (Lu Zhan Qi)
+# 陸軍棋 v2.2 (完整規則版)
 
-This is a web-based implementation of the Chinese board game Lu Zhan Qi (also known as Land Battle Chess). The game is built using vanilla HTML, CSS, and JavaScript, with no external libraries or frameworks.
+這是一個基於網頁的陸軍棋遊戲專案。整個遊戲使用原生的 HTML, CSS, 和 JavaScript 打造，沒有依賴任何外部函式庫或框架，讓您能輕鬆地在瀏覽器中直接運行。
 
-## How to Play
+## 如何開始遊戲
 
-1.  Clone or download this repository.
-2.  Open the `index.html` file in a modern web browser (like Chrome, Firefox, or Edge).
-3.  The game will load, and you can start playing immediately.
+1.  下載或複製此專案的所有檔案。
+2.  在您的電腦上，直接用任何現代瀏覽器（例如 Chrome, Firefox, Edge）開啟 `index.html` 檔案。
+3.  遊戲載入後即可開始遊玩。
 
-## Features
+## 遊戲特色
 
--   **Two Game Modes**: Choose between Player-vs-Player (PvP) for hot-seat play or Player-vs-AI (PvAI) to challenge the computer.
--   **Secret Random Deployment**: Pieces are randomly placed on the board at the start of each game, following the official placement rules.
--   **Full Game UI**: Includes a game log, status bar, and display for captured pieces.
--   **Complete Ruleset**: Implements all standard combat rules, including special interactions for Bombs, Landmines, and Engineers.
--   **Basic AI**: The computer opponent will prioritize attacks but will make random moves otherwise.
+-   **兩種遊戲模式**：提供「玩家對戰 (PvP)」和「電腦對戰 (PvAI)」兩種模式。PvP 模式為本機輪流操作（Hot-seat）。
+-   **秘密佈陣**：每局遊戲開始時，棋子會依據規則隨機佈署，您無法知道對手棋子的確切位置。
+-   **完整遊戲介面**：包含可滾動的遊戲日誌、雙方被吃的棋子列表，以及顯示當前狀態的資訊列。
+-   **完整戰鬥規則**：實現了司令、炸彈、地雷、工兵等所有棋子之間的克制關係。
+-   **基礎遊戲AI**：電腦對手會優先攻擊可吃掉的棋子，若無則隨機移動。
 
-## Core Game Rules
+## 核心遊戲規則
 
--   **Objective**: Capture the enemy's Flag (軍旗).
--   **Movement**: All pieces (except the Flag and Landmines) can move one space up, down, left, or right.
--   **Combat**:
-    -   Higher rank pieces capture lower rank pieces.
-    -   Pieces of the same rank are both eliminated.
-    -   **Bombs (炸彈)**: Eliminate any piece they attack or are attacked by.
-    -   **Landmines (地雷)**: Eliminate any piece that attacks them, except for the Engineer. Landmines do not move.
-    -   **Engineers (工兵)**: Are the only pieces that can capture Landmines.
--   **Winning**: You win by capturing the enemy Flag or if your opponent has no legal moves left.
--   **Losing**: You lose if your Flag is captured or if you have no legal moves on your turn.
+-   **遊戲目標**：吃掉對手的 **軍旗** (Flag)。
+-   **移動規則**：除了 **軍旗** 和 **地雷** 無法移動外，所有棋子都只能向相鄰的上、下、左、右格子移動一格。
+-   **戰鬥規則**:
+    -   **比大小**：階級高的棋子可以吃掉階級低的棋子（司令 > 軍長 > ... > 工兵）。
+    -   **同歸於盡**：階級相同的棋子相遇時，兩者同時從棋盤上移除。
+    -   **炸彈 (Bomb)**：與任何棋子相遇時，兩者一同移除。
+    -   **地雷 (Landmine)**：任何棋子主動攻擊地雷時，攻擊方會被移除，地雷則留在原位。
+    -   **工兵 (Engineer)**：是唯一可以安全移除地雷的棋子。
+-   **勝利條件**：
+    1.  成功吃掉對方的 **軍旗**。
+    2.  輪到對方走棋時，對方沒有任何可以合法移動的棋子。
+-   **失敗條件**：
+    1.  己方的 **軍旗** 被吃掉。
+    2.  輪到自己走棋時，沒有任何可以合法移動的棋子。
