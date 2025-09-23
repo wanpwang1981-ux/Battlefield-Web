@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>陸軍棋 v2.2</title>
+    <!-- 連結外部 CSS 樣式表 -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- 主要遊戲容器 -->
+    <div id="game-container">
+        <h1>陸軍棋 v2.2</h1>
+
+        <!-- 遊戲模式選擇畫面 -->
+        <div id="mode-selection">
+            <h2>選擇遊戲模式</h2>
+            <button id="pvp-button">玩家對戰 (PvP)</button>
+            <button id="pvai-button">電腦對戰 (PvAI)</button>
+        </div>
+
+        <!-- 主要遊戲區域，預設隱藏 -->
+        <div id="game-area" class="hidden">
+            <!-- 遊戲資訊列 (輪到誰、狀態) -->
+            <div id="game-info">
+                <div id="player-turn">輪到: 紅方</div>
+                <div id="status-bar">狀態: 等待遊戲開始</div>
+            </div>
+
+            <!-- 包含棋盤和被吃棋子區域的容器 -->
+            <div id="board-container">
+                <!-- 黑方被吃棋子顯示區 -->
+                <div id="captured-black" class="captured-area">
+                    <h3>黑方被吃棋子</h3>
+                    <div class="pieces"></div>
+                </div>
+
+                <!-- 遊戲棋盤 -->
+                <div id="board"></div>
+
+                <!-- 紅方被吃棋子顯示區 -->
+                <div id="captured-red" class="captured-area">
+                    <h3>紅方被吃棋子</h3>
+                    <div class="pieces"></div>
+                </div>
+            </div>
+
+            <!-- 遊戲日誌容器 -->
+            <div id="log-container">
+                <h3>遊戲日誌</h3>
+                <div id="game-log"></div>
+            </div>
+
+            <!-- 重新開始按鈕 -->
+             <button id="reset-button">重新開始</button>
+        </div>
+    </div>
+
+    <!-- 連結主要的 JavaScript 檔案 -->
+    <script src="js/game.js"></script>
+</body>
+</html>
