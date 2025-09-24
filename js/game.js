@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const difficultySelection = document.getElementById('difficulty-selection');
     const pvpButton = document.getElementById('pvp-button');
     const pvaiButton = document.getElementById('pvai-button');
+    const cvcButton = document.getElementById('cvc-button');
     const easyAIButton = document.getElementById('easy-ai-button');
     const normalAIButton = document.getElementById('normal-ai-button');
     const hardAIButton = document.getElementById('hard-ai-button');
@@ -61,6 +62,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 事件監聽器 ---
     pvpButton.addEventListener('click', () => startGame('pvp'));
+
+    cvcButton.addEventListener('click', () => {
+        // For now, CvC defaults to Easy vs Easy AI.
+        // Difficulty selection for each AI can be added later.
+        gameState.difficulty = 'easy';
+        startGame('cvc');
+    });
 
     pvaiButton.addEventListener('click', () => {
         modeSelection.classList.add('hidden');
@@ -140,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.gameMode = mode;
 
         // 顯示遊戲區域，隱藏模式選擇畫面
+        difficultySelection.classList.add('hidden');
         modeSelection.classList.add('hidden');
         gameArea.classList.remove('hidden');
 
@@ -150,6 +159,14 @@ document.addEventListener('DOMContentLoaded', () => {
         initBoard(); // 初始化棋盤佈局
         renderBoard(); // 將棋盤渲染到畫面上
         logAction(`遊戲開始！模式: ${mode.toUpperCase()}。 紅方先手。`);
+
+        // 如果是 CvC 模式，自動開始第一步
+        if (mode === 'cvc') {
+            // 禁用點擊，因為是全自動
+            boardElement.style.pointerEvents = 'none';
+            // 短延遲後開始
+            setTimeout(() => executeAITurn(), 200);
+        }
     }
 
     /**
@@ -490,15 +507,19 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCapturedPieces();
         checkWinCondition(); // 每次移動後檢查勝利/失敗條件
 
-        // 如果是 PvAI 模式且輪到 AI，則觸發 AI 回合
-        if (gameState.gameMode === 'pvai' && gameState.currentPlayer === PLAYERS.BLACK && !gameState.gameOver) {
-            boardElement.style.pointerEvents = 'none'; // AI思考時，禁止玩家點擊
+        // 如果是 AI 的回合 (PvAI 的黑方，或 CvC 的任何一方)，則觸發 AI
+        const isAIsTurn = (gameState.gameMode === 'pvai' && gameState.currentPlayer === PLAYERS.BLACK) || gameState.gameMode === 'cvc';
+        if (isAIsTurn && !gameState.gameOver) {
+            const delay = gameState.gameMode === 'cvc' ? 200 : 1000; // CvC 模式下延遲較短
+            if (gameState.gameMode === 'pvai') boardElement.style.pointerEvents = 'none'; // PvAI模式下才需禁止玩家點擊
+
             setTimeout(() => {
                 executeAITurn();
-                if (!gameState.gameOver) {
-                    boardElement.style.pointerEvents = 'auto'; // AI行動結束後，恢復玩家點擊
+                // 在 PvAI 模式下，AI 行動結束後恢復玩家點擊
+                if (gameState.gameMode === 'pvai' && !gameState.gameOver) {
+                    boardElement.style.pointerEvents = 'auto';
                 }
-            }, 1000); // 延遲 1 秒，模擬 AI 思考
+            }, delay);
         }
     }
 
@@ -650,34 +671,29 @@ document.addEventListener('DOMContentLoaded', () => {
      * 根據遊戲難度，呼叫對應的 AI 函式。
      */
     function executeAITurn() {
+        const player = gameState.currentPlayer;
+        const opponent = (player === PLAYERS.RED) ? PLAYERS.BLACK : PLAYERS.RED;
+
+        // Note: For CvC mode, we might want different difficulties for each player.
+        // For now, both AIs in CvC use the same selected difficulty.
         if (gameState.difficulty === 'hard') {
-            executeHardAITurn();
+            executeHardAITurn(player, opponent);
         } else if (gameState.difficulty === 'normal') {
-            executeNormalAITurn();
+            executeNormalAITurn(player, opponent);
         } else {
-            executeEasyAITurn();
+            executeEasyAITurn(player, opponent);
         }
     }
 
     /**
      * 簡單難度 AI：隨機選擇可行的攻擊或移動。
+     * @param {string} player - The current AI player.
+     * @param {string} opponent - The opponent player.
      */
-    function executeEasyAITurn() {
+    function executeEasyAITurn(player, opponent) {
         if (gameState.gameOver) return;
 
-        const allMoves = [];
-        // 1. 找出 AI (黑方) 所有可以移動的棋子及其所有合法走法
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                const piece = gameState.boardState[r][c];
-                if (piece && piece.player === PLAYERS.BLACK && piece.type !== 'flag' && piece.type !== 'landmine') {
-                    const validMoves = getValidMoves(r, c);
-                    validMoves.forEach(move => {
-                        allMoves.push({ from: { r, c }, to: move });
-                    });
-                }
-            }
-        }
+        const allMoves = getAllMovesForPlayer(gameState.boardState, player);
 
         // 2. 將所有走法分為「攻擊性走法」和「非攻擊性走法」
         const attackingMoves = allMoves.filter(move => gameState.boardState[move.to.r][move.to.c] !== null);
@@ -705,8 +721,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * 普通難度 AI：使用評分系統和防禦邏輯選擇最佳移動。
+     * @param {string} player - The current AI player.
+     * @param {string} opponent - The opponent player.
      */
-    function executeNormalAITurn() {
+    function executeNormalAITurn(player, opponent) {
         if (gameState.gameOver) return;
 
         // --- 1. 防禦邏輯：檢查是否有高價值棋子受到威脅 ---
@@ -715,7 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 const piece = gameState.boardState[r][c];
-                if (piece && piece.player === PLAYERS.BLACK) {
+                if (piece && piece.player === player) {
                     myPieces.push({ piece, r, c });
                 }
             }
@@ -731,14 +749,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (enemyR >= 0 && enemyR < ROWS && enemyC >= 0 && enemyC < COLS) {
                     const enemyPiece = gameState.boardState[enemyR][enemyC];
-                    if (enemyPiece && enemyPiece.player === PLAYERS.RED && enemyPiece.revealed) {
+                    if (enemyPiece && enemyPiece.player === opponent && enemyPiece.revealed) {
                         const combatResult = simulateCombat(enemyPiece, myPiece.piece);
-                        if (combatResult.winner === 'attacker') { // 'attacker' is the player piece
+                        if (combatResult.winner === 'attacker') { // 'attacker' is the opponent piece
                             // 威脅存在！立即尋找逃跑路線
                             const escapeMoves = getValidMoves(myPiece.r, myPiece.c).filter(move => !gameState.boardState[move.r][move.c]);
                             if (escapeMoves.length > 0) {
                                 const escapeMove = escapeMoves[Math.floor(Math.random() * escapeMoves.length)];
-                                logAction(`AI: ${myPiece.piece.name} 偵測到威脅，緊急撤離！`);
+                                logAction(`AI (${player}): ${myPiece.piece.name} 偵測到威脅，緊急撤離！`);
                                 movePiece(myPiece.r, myPiece.c, escapeMove.r, escapeMove.c);
                                 return; // 執行防禦移動後結束回合
                             }
@@ -818,8 +836,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- 非攻擊性移動評分 ---
-        // 基礎分為 0，鼓勵向前移動（對黑方來說，r 座標增加即為向前）。
-        let score = (move.to.r - move.from.r);
+        // 基礎分為 0，鼓勵向前移動。
+        let score = 0;
+        if (attacker.player === PLAYERS.BLACK) {
+            score += (move.to.r - move.from.r); // 黑方往下走是向前
+        } else {
+            score += (move.from.r - move.to.r); // 紅方往上走是向前
+        }
         return score;
     }
 
@@ -850,23 +873,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * 評估當前棋盤狀態的分數（從 AI/黑方的角度）。
+     * 從指定玩家的角度評估當前棋盤狀態的分數。
      * @param {Array<Array<Object>>} board - 要評估的棋盤狀態。
+     * @param {string} player - 我們正在為其評分的玩家。
      * @returns {number} 棋盤的分數。
      */
-    function evaluateBoard(board) {
+    function evaluateBoard(board, player) {
         let score = 0;
+        const opponent = (player === PLAYERS.RED) ? PLAYERS.BLACK : PLAYERS.RED;
+
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 const piece = board[r][c];
                 if (piece) {
-                    // 分數 = AI棋子總分 - 玩家棋子總分
-                    // 棋子的基礎分是其階級的平方，以放大高階棋子的價值。
+                    // 分數 = 我方棋子總分 - 敵方棋子總分
                     const pieceScore = piece.rank * piece.rank;
-                    if (piece.player === PLAYERS.BLACK) {
+                    if (piece.player === player) {
                         score += pieceScore;
-                    } else {
-                        // 只計算已知的玩家棋子，未知的棋子對 AI 來說沒有直接的負價值。
+                    } else if (piece.player === opponent) {
                         if (piece.revealed) {
                             score -= pieceScore;
                         }
@@ -881,28 +905,29 @@ document.addEventListener('DOMContentLoaded', () => {
      * Minimax 演算法，帶有 Alpha-Beta 剪枝優化。
      * @param {Array<Array<Object>>} board - 要評估的棋盤。
      * @param {number} depth - 搜尋深度。
-     * @param {boolean} isMaximizing - 目前是最大化（AI）還是最小化（玩家）節點。
+     * @param {string} maximizingPlayer - 我們要為其最大化分數的玩家。
+     * @param {boolean} isMaximizing - 目前是最大化還是最小化節點。
      * @param {number} alpha - Alpha-Beta 剪枝的 Alpha 值。
      * @param {number} beta - Alpha-Beta 剪枝的 Beta 值。
      * @returns {number} 該節點的最佳分數。
      */
-    function minimax(board, depth, isMaximizing, alpha, beta) {
+    function minimax(board, depth, maximizingPlayer, isMaximizing, alpha, beta) {
         if (depth === 0) {
-            return evaluateBoard(board);
+            return evaluateBoard(board, maximizingPlayer);
         }
 
-        const player = isMaximizing ? PLAYERS.BLACK : PLAYERS.RED;
-        const allMoves = getAllMovesForPlayer(board, player);
+        const currentPlayer = isMaximizing ? maximizingPlayer : (maximizingPlayer === PLAYERS.RED ? PLAYERS.BLACK : PLAYERS.RED);
+        const allMoves = getAllMovesForPlayer(board, currentPlayer);
 
         if (allMoves.length === 0) {
-            return evaluateBoard(board);
+            return evaluateBoard(board, maximizingPlayer);
         }
 
         if (isMaximizing) {
             let maxEval = -Infinity;
             for (const move of allMoves) {
                 const newBoard = applySimulatedMove(board, move);
-                const evaluation = minimax(newBoard, depth - 1, false, alpha, beta);
+                const evaluation = minimax(newBoard, depth - 1, maximizingPlayer, false, alpha, beta);
                 maxEval = Math.max(maxEval, evaluation);
                 alpha = Math.max(alpha, evaluation);
                 if (beta <= alpha) {
@@ -914,7 +939,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let minEval = +Infinity;
             for (const move of allMoves) {
                 const newBoard = applySimulatedMove(board, move);
-                const evaluation = minimax(newBoard, depth - 1, true, alpha, beta);
+                const evaluation = minimax(newBoard, depth - 1, maximizingPlayer, true, alpha, beta);
                 minEval = Math.min(minEval, evaluation);
                 beta = Math.min(beta, evaluation);
                 if (beta <= alpha) {
@@ -987,11 +1012,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * 困難難度 AI：使用 Minimax 演算法找出最佳移動。
+     * @param {string} player - The current AI player.
+     * @param {string} opponent - The opponent player.
      */
-    function executeHardAITurn() {
+    function executeHardAITurn(player, opponent) {
         if (gameState.gameOver) return;
 
-        const allMoves = getAllMovesForPlayer(gameState.boardState, PLAYERS.BLACK);
+        const allMoves = getAllMovesForPlayer(gameState.boardState, player);
 
         if (allMoves.length === 0) {
             checkWinCondition();
@@ -1005,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const move of allMoves) {
             const newBoard = applySimulatedMove(gameState.boardState, move);
             // 我們是 Maximizing player，所以下一步是 Minimizing player
-            const score = minimax(newBoard, depth - 1, false, -Infinity, +Infinity);
+            const score = minimax(newBoard, depth - 1, player, false, -Infinity, +Infinity);
 
             if (score > bestScore) {
                 bestScore = score;
