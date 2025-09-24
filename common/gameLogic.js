@@ -3,10 +3,10 @@
 // It does not depend on the DOM or any browser-specific APIs.
 (function(exports) {
 
+    // --- CONSTANTS ---
     const ROWS = 12;
     const COLS = 5;
     const PLAYERS = { RED: 'red', BLACK: 'black' };
-
     const PIECE_TYPES = {
         'flag': { rank: 0, name: '軍旗', count: 1 },
         'landmine': { rank: 1, name: '地雷', count: 3 },
@@ -21,6 +21,8 @@
         'general': { rank: 10, name: '軍長', count: 1 },
         'field_marshal': { rank: 11, name: '司令', count: 1 },
     };
+
+    // --- FUNCTION DEFINITIONS ---
 
     function shuffle(array) {
         for (let i = array.length - 1; i > 0; i--) {
@@ -42,11 +44,8 @@
     function placePlayerPieces(board, player, zone) {
         let allPieces = createPlayerPieces(player);
         const allPlayerCells = [];
-        for (let r = zone.startRow; r <= zone.endRow; r++) {
-            for (let c = 0; c < COLS; c++) {
-                allPlayerCells.push({ r, c });
-            }
-        }
+        for (let r = zone.startRow; r <= zone.endRow; r++) for (let c = 0; c < COLS; c++) allPlayerCells.push({ r, c });
+
         const placeRestrictedPieces = (piecesToPlace, validCells) => {
             shuffle(validCells);
             piecesToPlace.forEach(piece => {
@@ -58,25 +57,27 @@
                 }
             });
         };
+
         const flag = allPieces.find(p => p.type === 'flag');
         allPieces = allPieces.filter(p => p.type !== 'flag');
         const headquartersCells = allPlayerCells.filter(c => (c.r === zone.endRow && (c.c === 1 || c.c === 3)));
         placeRestrictedPieces([flag], headquartersCells);
+
         const landmines = allPieces.filter(p => p.type === 'landmine');
         allPieces = allPieces.filter(p => p.type !== 'landmine');
         const lastTwoRowsCells = allPlayerCells.filter(c => c.r >= zone.endRow - 1);
         placeRestrictedPieces(landmines, lastTwoRowsCells);
+
         const bombs = allPieces.filter(p => p.type === 'bomb');
         allPieces = allPieces.filter(p => p.type !== 'bomb');
         const notFirstRowCells = allPlayerCells.filter(c => c.r !== zone.startRow);
         placeRestrictedPieces(bombs, notFirstRowCells);
+
         shuffle(allPieces);
         shuffle(allPlayerCells);
         allPieces.forEach(piece => {
             const cell = allPlayerCells.pop();
-            if (cell) {
-                board[cell.r][cell.c] = piece;
-            }
+            if (cell) board[cell.r][cell.c] = piece;
         });
     }
 
@@ -105,13 +106,10 @@
         if (!piece) return [];
         const directions = [{ r: -1, c: 0 }, { r: 1, c: 0 }, { r: 0, c: -1 }, { r: 0, c: 1 }];
         for (const dir of directions) {
-            const newRow = row + dir.r;
-            const newCol = col + dir.c;
+            const newRow = row + dir.r, newCol = col + dir.c;
             if (newRow >= 0 && newRow < ROWS && newCol >= 0 && newCol < COLS) {
                 const targetPiece = board[newRow][newCol];
-                if (!targetPiece || targetPiece.player !== piece.player) {
-                    moves.push({ r: newRow, c: newCol });
-                }
+                if (!targetPiece || targetPiece.player !== piece.player) moves.push({ r: newRow, c: newCol });
             }
         }
         return moves;
@@ -134,9 +132,7 @@
                 const piece = board[r][c];
                 if (piece && piece.player === player && piece.type !== 'flag' && piece.type !== 'landmine') {
                     const validMoves = getValidMoves(board, r, c);
-                    validMoves.forEach(move => {
-                         allMoves.push({ from: { r, c }, to: { r: move.r, c: move.c }, piece });
-                    });
+                    validMoves.forEach(move => allMoves.push({ from: { r, c }, to: { r: move.r, c: move.c }, piece }));
                 }
             }
         }
@@ -153,9 +149,7 @@
             else if (combatResult.winner === 'tie') return 50 - attacker.rank;
             else return -100 - attacker.rank;
         }
-        let score = 0;
-        if (attacker.player === PLAYERS.BLACK) score += (move.to.r - move.from.r);
-        else score += (move.from.r - move.to.r);
+        let score = (attacker.player === PLAYERS.BLACK) ? (move.to.r - move.from.r) : (move.from.r - move.to.r);
         return score;
     }
 
@@ -279,7 +273,7 @@
         return bestMoves[Math.floor(Math.random() * bestMoves.length)];
     }
 
-    // Export for both browser (window.GameLogic) and Node.js (module.exports)
+    // --- EXPORTS ---
     exports.ROWS = ROWS;
     exports.COLS = COLS;
     exports.PLAYERS = PLAYERS;
@@ -287,6 +281,10 @@
     exports.initBoard = initBoard;
     exports.getValidMoves = getValidMoves;
     exports.simulateCombat = simulateCombat;
+    exports.getAllMovesForPlayer = getAllMovesForPlayer;
+    exports.applySimulatedMove = applySimulatedMove;
+    exports.evaluateBoard = evaluateBoard;
+    exports.minimax = minimax;
     exports.executeEasyAITurn = executeEasyAITurn;
     exports.executeNormalAITurn = executeNormalAITurn;
     exports.executeHardAITurn = executeHardAITurn;

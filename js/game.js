@@ -25,7 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const capturedBlackElement = document.getElementById('captured-black').querySelector('.pieces');
 
     // --- 從共享邏輯中獲取常數和函式 ---
-    const { ROWS, COLS, PLAYERS, initBoard, getValidMoves, simulateCombat, executeEasyAITurn, executeNormalAITurn, executeHardAITurn } = GameLogic;
+    // GameLogic is loaded from common/gameLogic.js in index.html
+    const { ROWS, COLS, PLAYERS, initBoard, getValidMoves, simulateCombat, executeEasyAITurn, executeNormalAITurn, executeHardAITurn, getAllMovesForPlayer } = GameLogic;
 
     // --- 遊戲狀態管理 ---
     let gameState = {};
@@ -91,9 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function startGame(mode) {
         console.log(`以 ${mode} 模式開始遊戲，難度: ${gameState.difficulty}`);
         setupInitialGameState();
-        boardElement.style.pointerEvents = 'auto';
         gameState.gameMode = mode;
 
+        boardElement.style.pointerEvents = 'auto';
         difficultySelection.classList.add('hidden');
         modeSelection.classList.add('hidden');
         gameArea.classList.remove('hidden');
@@ -305,6 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isAIsTurn && !gameState.gameOver) {
             const delay = gameState.gameMode === 'cvc' ? 50 : 1000;
             if (gameState.gameMode === 'pvai') boardElement.style.pointerEvents = 'none';
+
             setTimeout(() => {
                 executeAITurn();
                 if (gameState.gameMode === 'pvai' && !gameState.gameOver) {
