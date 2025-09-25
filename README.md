@@ -48,4 +48,20 @@
     - 在 `backend` 資料夾中，執行啟動指令: `npm start`
     - 看到 `伺服器正在 http://localhost:3000 上運行` 的訊息即表示成功。
 4.  **測試 (可選)**:
-    - 您可以使用 `curl` 或 Postman 等工具來測試 API 端點，例如發送一個 POST 請求到 `http://localhost:3000/api/run-cvc` 來進行一次無頭對戰。
+    - 您可以使用 `curl` 或 Postman 等工具來測試 API 端點。
+
+### AI 訓練與分析
+
+本後端包含一個特殊的 API 端點，用於產生詳細的 AI 對戰紀錄，方便分析和優化 AI。
+
+1.  **產生對戰紀錄**:
+    - 在一個**新的**終端機視窗中，執行以下指令：
+    ```bash
+    curl -X POST http://localhost:3000/api/run-cvc-with-log -o analysis_log.json
+    ```
+    - 這個指令會執行一場「普通」對「困難」的 AI 比賽，並將包含 AI 每一步思考過程的詳細 JSON 日誌儲存到一個名為 `analysis_log.json` 的檔案中。
+
+2.  **如何使用日誌進行優化**:
+    - 當您在遊戲中發現 AI 做出不合理的決策時，可以執行上述指令來獲取一份詳細的對戰紀錄。
+    - 您可以將這份 `analysis_log.json` 檔案的內容提供出來，並指出在哪一個回合（`turn`）中，AI 的決策（`decision`）不理想，以及您認為更好的選擇是什麼。
+    - 根據這些數據，我就可以精確地調整 AI 的評估函式，實現「輔助學習」。

@@ -319,11 +319,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function executeAITurn() {
         const player = gameState.currentPlayer;
         const opponent = (player === PLAYERS.RED) ? PLAYERS.BLACK : PLAYERS.RED;
-        let chosenMove;
+        let aiResult;
 
-        if (gameState.difficulty === 'hard') chosenMove = executeHardAITurn(gameState.boardState, player);
-        else if (gameState.difficulty === 'normal') chosenMove = executeNormalAITurn(gameState.boardState, player, opponent);
-        else chosenMove = executeEasyAITurn(gameState.boardState, player);
+        if (gameState.difficulty === 'hard') {
+            aiResult = executeHardAITurn(gameState.boardState, player);
+        } else if (gameState.difficulty === 'normal') {
+            aiResult = executeNormalAITurn(gameState.boardState, player, opponent);
+        } else {
+            aiResult = executeEasyAITurn(gameState.boardState, player);
+        }
+
+        const chosenMove = aiResult.bestMove;
 
         if (chosenMove) {
             if(chosenMove.isDefensive) logAction(`AI (${player}): ${chosenMove.piece.name} 偵測到威脅，緊急撤離！`);
