@@ -21,6 +21,11 @@
         'general': { rank: 10, name: '軍長', count: 1 },
         'field_marshal': { rank: 11, name: '司令', count: 1 },
     };
+    const DEFAULT_AI_WEIGHTS = {
+        pieceValue: 10,
+        revealedPenalty: 5,
+        positionalBonus: 1,
+    };
 
     // --- FUNCTION DEFINITIONS ---
 
@@ -174,22 +179,15 @@
     function executeEasyAITurn(board, player) {
         const allMoves = getAllMovesForPlayer(board, player);
         if (allMoves.length === 0) return { bestMove: null, moveScores: [] };
-
         const attackingMoves = allMoves.filter(move => board[move.to.r][move.to.c] !== null);
         const nonAttackingMoves = allMoves.filter(move => board[move.to.r][move.to.c] === null);
-
         let chosenMove;
-        if (attackingMoves.length > 0) {
-            chosenMove = attackingMoves[Math.floor(Math.random() * attackingMoves.length)];
-        } else {
-            chosenMove = nonAttackingMoves[Math.floor(Math.random() * nonAttackingMoves.length)];
-        }
-        // Easy AI has no scoring, so we return a simplified log.
+        if (attackingMoves.length > 0) chosenMove = attackingMoves[Math.floor(Math.random() * attackingMoves.length)];
+        else chosenMove = nonAttackingMoves[Math.floor(Math.random() * nonAttackingMoves.length)];
         return { bestMove: chosenMove, moveScores: [{ move: chosenMove, score: 1 }] };
     }
 
     function executeNormalAITurn(board, player, opponent) {
-        // Defensive check
         const highValuePieces = ['field_marshal', 'general', 'major_general', 'brigadier'];
         const myPieces = [];
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (board[r][c] && board[r][c].player === player) myPieces.push({ piece: board[r][c], r, c });
@@ -212,47 +210,46 @@
                 }
             }
         }
-
-        // Offensive/General move scoring
         const allMoves = getAllMovesForPlayer(board, player);
         if (allMoves.length === 0) return { bestMove: null, moveScores: [] };
-
         const moveScores = allMoves.map(move => ({ move, score: getMoveScore(board, move) }));
-        moveScores.sort((a, b) => b.score - a.score); // Sort descending by score
-
+        moveScores.sort((a, b) => b.score - a.score);
         const bestScore = moveScores[0].score;
         const bestMoves = moveScores.filter(ms => ms.score === bestScore);
-
         const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
         return { bestMove: chosenMove, moveScores };
     }
 
-    function evaluateBoard(board, player) {
+    function evaluateBoard(board, player, weights) {
         let score = 0;
         const opponent = (player === PLAYERS.RED) ? PLAYERS.BLACK : PLAYERS.RED;
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 const piece = board[r][c];
                 if (piece) {
-                    const pieceScore = piece.rank * piece.rank;
+                    let pieceScore = 0;
+                    pieceScore += piece.rank * weights.pieceValue;
+                    if (player === PLAYERS.BLACK) pieceScore += r * weights.positionalBonus;
+                    else pieceScore += (ROWS - 1 - r) * weights.positionalBonus;
                     if (piece.player === player) score += pieceScore;
-                    else if (piece.player === opponent && piece.revealed) score -= pieceScore;
+                    else if (piece.revealed) score -= pieceScore;
+                    else score -= weights.revealedPenalty;
                 }
             }
         }
         return score;
     }
 
-    function minimax(board, depth, maximizingPlayer, isMaximizing, alpha, beta) {
-        if (depth === 0) return evaluateBoard(board, maximizingPlayer);
+    function minimax(board, depth, maximizingPlayer, isMaximizing, alpha, beta, weights) {
+        if (depth === 0) return evaluateBoard(board, maximizingPlayer, weights);
         const currentPlayer = isMaximizing ? maximizingPlayer : (maximizingPlayer === PLAYERS.RED ? PLAYERS.BLACK : PLAYERS.RED);
         const allMoves = getAllMovesForPlayer(board, currentPlayer);
-        if (allMoves.length === 0) return evaluateBoard(board, maximizingPlayer);
+        if (allMoves.length === 0) return evaluateBoard(board, maximizingPlayer, weights);
         if (isMaximizing) {
             let maxEval = -Infinity;
             for (const move of allMoves) {
                 const newBoard = applySimulatedMove(board, move);
-                const evaluation = minimax(newBoard, depth - 1, maximizingPlayer, false, alpha, beta);
+                const evaluation = minimax(newBoard, depth - 1, maximizingPlayer, false, alpha, beta, weights);
                 maxEval = Math.max(maxEval, evaluation);
                 alpha = Math.max(alpha, evaluation);
                 if (beta <= alpha) break;
@@ -262,7 +259,7 @@
             let minEval = +Infinity;
             for (const move of allMoves) {
                 const newBoard = applySimulatedMove(board, move);
-                const evaluation = minimax(newBoard, depth - 1, maximizingPlayer, true, alpha, beta);
+                const evaluation = minimax(newBoard, depth - 1, maximizingPlayer, true, alpha, beta, weights);
                 minEval = Math.min(minEval, evaluation);
                 beta = Math.min(beta, evaluation);
                 if (beta <= alpha) break;
@@ -271,24 +268,19 @@
         }
     }
 
-    function executeHardAITurn(board, player) {
+    function executeHardAITurn(board, player, weights = DEFAULT_AI_WEIGHTS) {
         const allMoves = getAllMovesForPlayer(board, player);
         if (allMoves.length === 0) return { bestMove: null, moveScores: [] };
-
-        const depth = 2; // Minimax search depth
+        const depth = 2;
         const moveScores = [];
-
         for (const move of allMoves) {
             const newBoard = applySimulatedMove(board, move);
-            const score = minimax(newBoard, depth - 1, player, false, -Infinity, +Infinity);
+            const score = minimax(newBoard, depth - 1, player, false, -Infinity, +Infinity, weights);
             moveScores.push({ move, score });
         }
-
         moveScores.sort((a, b) => b.score - a.score);
-
         const bestScore = moveScores[0].score;
         const bestMoves = moveScores.filter(ms => ms.score === bestScore);
-
         const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
         return { bestMove: chosenMove, moveScores };
     }
@@ -298,6 +290,7 @@
     exports.COLS = COLS;
     exports.PLAYERS = PLAYERS;
     exports.PIECE_TYPES = PIECE_TYPES;
+    exports.DEFAULT_AI_WEIGHTS = DEFAULT_AI_WEIGHTS;
     exports.initBoard = initBoard;
     exports.getValidMoves = getValidMoves;
     exports.simulateCombat = simulateCombat;
