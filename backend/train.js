@@ -1,5 +1,7 @@
 // --- AI Training Script using a Genetic Algorithm ---
 
+const fs = require('fs');
+const path = require('path');
 const GameLogic = require('../common/gameLogic.js');
 
 // --- GA Parameters ---
@@ -166,10 +168,16 @@ async function train() {
 
     // 5. Output the best weights
     console.log("\n--- Training Complete ---");
-    console.log("Best AI weights found:");
     // Sort final population one last time
     population.sort((a, b) => b.fitness - a.fitness);
-    console.log(JSON.stringify(population[0].weights, null, 2));
+    const champion = population[0];
+    const outputPath = path.join(__dirname, 'champion_weights.json');
+
+    console.log("Best AI weights found:");
+    console.log(JSON.stringify(champion.weights, null, 2));
+
+    fs.writeFileSync(outputPath, JSON.stringify(champion.weights, null, 2));
+    console.log(`\nChampion weights have been saved to: ${outputPath}`);
 }
 
 train();
