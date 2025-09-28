@@ -5,8 +5,10 @@ const path = require('path');
 const GameLogic = require('../common/gameLogic.js');
 
 // --- GA Parameters ---
-const POPULATION_SIZE = 20;
-const NUM_GENERATIONS = 10;
+// NOTE: Using the 'hard' AI with Minimax makes training MUCH slower.
+// These values are set low for testing purposes. Increase them for more thorough training.
+const POPULATION_SIZE = 10;
+const NUM_GENERATIONS = 5;
 const MUTATION_RATE = 0.1; // 10% chance for a weight to mutate
 const MUTATION_AMOUNT = 0.2; // Mutate by +/- 20%
 const NUM_GAMES_PER_MATCHUP = 2; // Each AI plays against another twice (once as Red, once as Black)
@@ -42,14 +44,8 @@ function runHeadlessGame(weights1, weights2) {
         }
 
         const currentWeights = (currentPlayer === GameLogic.PLAYERS.RED) ? weights1 : weights2;
-        // OPTIMIZATION: Use the faster Normal AI logic for training, but pass the evolving weights to its evaluation function.
-        // The 'executeNormalAITurn' itself doesn't use weights, but its underlying 'getMoveScore' does.
-        // To make this work, we need a way for getMoveScore to get the weights.
-        // Let's refactor `executeNormalAITurn` to accept weights.
-        // For now, we will just call the function. We will need another refactoring step.
-        // This is a simplification for now. The key is to use a non-minimax AI.
-        const { bestMove } = GameLogic.executeNormalAITurn(board, currentPlayer, opponent, currentWeights);
-
+        // Use the 'Hard' AI so that the new evaluation function is actually used in the simulation.
+        const { bestMove } = GameLogic.executeHardAITurn(board, currentPlayer, currentWeights);
 
         if (!bestMove) {
             return opponent; // AI detected no moves
