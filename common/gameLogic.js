@@ -1,6 +1,4 @@
 // --- Shared Game Logic ---
-// This file contains game logic that can be shared between the frontend and a potential backend.
-// It does not depend on the DOM or any browser-specific APIs.
 (function(exports) {
 
     // --- CONSTANTS ---
@@ -8,39 +6,30 @@
     const COLS = 5;
     const PLAYERS = { RED: 'red', BLACK: 'black' };
     const PIECE_TYPES = {
-        'flag': { rank: 0, name: '軍旗', count: 1 },
-        'landmine': { rank: 1, name: '地雷', count: 3 },
-        'bomb': { rank: 2, name: '炸彈', count: 2 },
-        'engineer': { rank: 3, name: '工兵', count: 3 },
-        'lieutenant': { rank: 4, name: '排長', count: 3 },
-        'captain': { rank: 5, name: '連長', count: 3 },
-        'major': { rank: 6, name: '營長', count: 2 },
-        'colonel': { rank: 7, name: '團長', count: 2 },
-        'brigadier': { rank: 8, name: '旅長', count: 2 },
-        'major_general': { rank: 9, name: '師長', count: 1 },
-        'general': { rank: 10, name: '軍長', count: 1 },
-        'field_marshal': { rank: 11, name: '司令', count: 1 },
+        'flag': { rank: 0, name: '軍旗' }, 'landmine': { rank: 1, name: '地雷' },
+        'bomb': { rank: 2, name: '炸彈' }, 'engineer': { rank: 3, name: '工兵' },
+        'lieutenant': { rank: 4, name: '排長' }, 'captain': { rank: 5, name: '連長' },
+        'major': { rank: 6, name: '營長' }, 'colonel': { rank: 7, name: '團長' },
+        'brigadier': { rank: 8, name: '旅長' }, 'major_general': { rank: 9, name: '師長' },
+        'general': { rank: 10, name: '軍長' }, 'field_marshal': { rank: 11, name: '司令' },
+    };
+    const PIECE_COUNTS = {
+        'flag': 1, 'landmine': 3, 'bomb': 2, 'engineer': 3, 'lieutenant': 3,
+        'captain': 3, 'major': 2, 'colonel': 2, 'brigadier': 2,
+        'major_general': 1, 'general': 1, 'field_marshal': 1
     };
     const DEFAULT_AI_WEIGHTS = {
-        pieceValue: 10,
-        revealedPenalty: 5,
-        positionalBonus: 1,
+        pieceValue: 10, revealedPenalty: 5, positionalBonus: 1,
     };
 
     // --- FUNCTION DEFINITIONS ---
 
-    function shuffle(array) {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
-    }
-
+    function shuffle(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
     function createPlayerPieces(player) {
         const pieces = [];
-        for (const type in PIECE_TYPES) {
-            for (let i = 0; i < PIECE_TYPES[type].count; i++) {
-                pieces.push({ type, rank: PIECE_TYPES[type].rank, name: PIECE_TYPES[type].name, player, revealed: false });
+        for (const type in PIECE_COUNTS) {
+            for (let i = 0; i < PIECE_COUNTS[type]; i++) {
+                pieces.push({ type, ...PIECE_TYPES[type], player, revealed: false });
             }
         }
         return pieces;
@@ -50,7 +39,6 @@
         let allPieces = createPlayerPieces(player);
         const allPlayerCells = [];
         for (let r = zone.startRow; r <= zone.endRow; r++) for (let c = 0; c < COLS; c++) allPlayerCells.push({ r, c });
-
         const placeRestrictedPieces = (piecesToPlace, validCells) => {
             shuffle(validCells);
             piecesToPlace.forEach(piece => {
@@ -62,22 +50,18 @@
                 }
             });
         };
-
         const flag = allPieces.find(p => p.type === 'flag');
         allPieces = allPieces.filter(p => p.type !== 'flag');
         const headquartersCells = allPlayerCells.filter(c => (c.r === zone.endRow && (c.c === 1 || c.c === 3)));
         placeRestrictedPieces([flag], headquartersCells);
-
         const landmines = allPieces.filter(p => p.type === 'landmine');
         allPieces = allPieces.filter(p => p.type !== 'landmine');
         const lastTwoRowsCells = allPlayerCells.filter(c => c.r >= zone.endRow - 1);
         placeRestrictedPieces(landmines, lastTwoRowsCells);
-
         const bombs = allPieces.filter(p => p.type === 'bomb');
         allPieces = allPieces.filter(p => p.type !== 'bomb');
         const notFirstRowCells = allPlayerCells.filter(c => c.r !== zone.startRow);
         placeRestrictedPieces(bombs, notFirstRowCells);
-
         shuffle(allPieces);
         shuffle(allPlayerCells);
         allPieces.forEach(piece => {
@@ -144,17 +128,19 @@
         return allMoves;
     }
 
-    function getMoveScore(board, move) {
+    function getMoveScore(board, move, weights) {
         const attacker = move.piece;
         const defender = board[move.to.r][move.to.c];
         if (defender) {
-            if (!defender.revealed) return 5 - attacker.rank;
+            if (!defender.revealed) return weights.revealedPenalty - attacker.rank;
             const combatResult = simulateCombat(attacker, defender);
-            if (combatResult.winner === 'attacker') return 100 + (defender.rank * 10);
+            if (combatResult.winner === 'attacker') return 100 + (defender.rank * weights.pieceValue);
             else if (combatResult.winner === 'tie') return 50 - attacker.rank;
             else return -100 - attacker.rank;
         }
-        let score = (attacker.player === PLAYERS.BLACK) ? (move.to.r - move.from.r) : (move.from.r - move.to.r);
+        let score = 0;
+        if (attacker.player === PLAYERS.BLACK) score += (move.to.r - move.from.r) * weights.positionalBonus;
+        else score += (move.from.r - move.to.r) * weights.positionalBonus;
         return score;
     }
 
@@ -187,7 +173,7 @@
         return { bestMove: chosenMove, moveScores: [{ move: chosenMove, score: 1 }] };
     }
 
-    function executeNormalAITurn(board, player, opponent) {
+    function executeNormalAITurn(board, player, opponent, weights = DEFAULT_AI_WEIGHTS) {
         const highValuePieces = ['field_marshal', 'general', 'major_general', 'brigadier'];
         const myPieces = [];
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (board[r][c] && board[r][c].player === player) myPieces.push({ piece: board[r][c], r, c });
@@ -212,7 +198,7 @@
         }
         const allMoves = getAllMovesForPlayer(board, player);
         if (allMoves.length === 0) return { bestMove: null, moveScores: [] };
-        const moveScores = allMoves.map(move => ({ move, score: getMoveScore(board, move) }));
+        const moveScores = allMoves.map(move => ({ move, score: getMoveScore(board, move, weights) }));
         moveScores.sort((a, b) => b.score - a.score);
         const bestScore = moveScores[0].score;
         const bestMoves = moveScores.filter(ms => ms.score === bestScore);

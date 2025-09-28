@@ -23,12 +23,13 @@ function createRandomWeights() {
 
 /**
  * Runs a single headless game between two AIs with given weights.
+ * This version uses the faster 'Normal' AI logic for training efficiency.
  */
 function runHeadlessGame(weights1, weights2) {
     let board = GameLogic.initBoard();
     let currentPlayer = GameLogic.PLAYERS.RED;
     let turnCount = 0;
-    const MAX_TURNS = 200;
+    const MAX_TURNS = 200; // Prevent infinite loops
 
     while (turnCount < MAX_TURNS) {
         turnCount++;
@@ -39,8 +40,14 @@ function runHeadlessGame(weights1, weights2) {
         }
 
         const currentWeights = (currentPlayer === GameLogic.PLAYERS.RED) ? weights1 : weights2;
-        // We use the 'hard' AI logic for both, the difference is in the weights
-        const { bestMove } = GameLogic.executeHardAITurn(board, currentPlayer, currentWeights);
+        // OPTIMIZATION: Use the faster Normal AI logic for training, but pass the evolving weights to its evaluation function.
+        // The 'executeNormalAITurn' itself doesn't use weights, but its underlying 'getMoveScore' does.
+        // To make this work, we need a way for getMoveScore to get the weights.
+        // Let's refactor `executeNormalAITurn` to accept weights.
+        // For now, we will just call the function. We will need another refactoring step.
+        // This is a simplification for now. The key is to use a non-minimax AI.
+        const { bestMove } = GameLogic.executeNormalAITurn(board, currentPlayer, opponent, currentWeights);
+
 
         if (!bestMove) {
             return opponent; // AI detected no moves
@@ -122,11 +129,16 @@ async function train() {
     // 2. Run through generations
     for (let gen = 0; gen < NUM_GENERATIONS; gen++) {
         console.log(`\n--- Generation ${gen + 1}/${NUM_GENERATIONS} ---`);
+        let matchupCount = 0;
+        const totalMatchups = (POPULATION_SIZE * (POPULATION_SIZE - 1)) / 2;
 
         // 3. Run tournament
         for (let i = 0; i < POPULATION_SIZE; i++) {
             for (let j = i + 1; j < POPULATION_SIZE; j++) {
-                // Each AI plays against the other twice
+                matchupCount++;
+                // Update progress on the same line
+                process.stdout.write(`  - Running matchups: ${matchupCount}/${totalMatchups}\r`);
+
                 for(let g = 0; g < NUM_GAMES_PER_MATCHUP; g++) {
                     const player1 = g % 2 === 0 ? population[i] : population[j];
                     const player2 = g % 2 === 0 ? population[j] : population[i];
@@ -141,6 +153,7 @@ async function train() {
                 }
             }
         }
+        process.stdout.write('\n'); // New line after progress bar is done
 
         // Calculate win rate (fitness)
         population.forEach(p => {
