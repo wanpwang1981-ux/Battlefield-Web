@@ -19,7 +19,9 @@
         'major_general': 1, 'general': 1, 'field_marshal': 1
     };
     const DEFAULT_AI_WEIGHTS = {
-        pieceValue: 10, revealedPenalty: 5, positionalBonus: 1,
+        "pieceValue": 10.98008994047408,
+        "revealedPenalty": 7.419040739552187,
+        "positionalBonus": 0.9617317194087325
     };
 
     // --- FUNCTION DEFINITIONS ---
