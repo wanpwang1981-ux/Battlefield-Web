@@ -19,9 +19,13 @@
         'major_general': 1, 'general': 1, 'field_marshal': 1
     };
     const DEFAULT_AI_WEIGHTS = {
-        pieceValue: 10,
-        revealedPenalty: 5,
-        positionalBonus: 1,
+        pieceValue: 10,         // Base value per rank
+        revealedPenalty: 3,     // Penalty for each unknown enemy piece
+        positionalBonus: 1,     // Bonus for advancing rows
+        threatPenalty: 50,      // Penalty if a high-value piece is threatened
+        opportunityBonus: 40,   // Bonus for creating a threat on a high-value piece
+        engineerVsMineBonus: 60,// Bonus for engineer attacking a mine
+        bombVsHighValueBonus: 70// Bonus for bomb attacking a high-value piece
     };
 
     // --- FUNCTION DEFINITIONS ---
@@ -153,39 +157,69 @@
     function evaluateBoard(board, player, weights) {
         let score = 0;
         const opponent = (player === PLAYERS.RED) ? PLAYERS.BLACK : PLAYERS.RED;
+        const highValuePieceRanks = [PIECE_TYPES.field_marshal.rank, PIECE_TYPES.general.rank, PIECE_TYPES.major_general.rank];
+
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 const piece = board[r][c];
-                if (piece) {
-                    let pieceScore = piece.rank * weights.pieceValue;
-                    if (piece.player === player) {
-                        score += pieceScore;
+                if (!piece) continue;
+
+                // 1. Basic Piece and Position Score
+                let pieceScore = piece.rank * weights.pieceValue;
+                if (player === PLAYERS.BLACK) { // Black moves down
+                    pieceScore += r * weights.positionalBonus;
+                } else { // Red moves up
+                    pieceScore += (ROWS - 1 - r) * weights.positionalBonus;
+                }
+
+                if (piece.player === player) {
+                    score += pieceScore;
+                } else {
+                    if (piece.revealed) {
+                        score -= pieceScore;
                     } else {
-                        if (piece.revealed) {
-                            score -= pieceScore;
-                        } else {
-                            score -= weights.revealedPenalty;
+                        score -= weights.revealedPenalty;
+                    }
+                }
+
+                // 2. Threat & Opportunity Assessment (only if piece has neighbors)
+                const directions = [{ r: -1, c: 0 }, { r: 1, c: 0 }, { r: 0, c: -1 }, { r: 0, c: 1 }];
+                for (const dir of directions) {
+                    const adjR = r + dir.r;
+                    const adjC = c + dir.c;
+
+                    if (adjR >= 0 && adjR < ROWS && adjC >= 0 && adjC < COLS) {
+                        const otherPiece = board[adjR][adjC];
+                        if (!otherPiece || otherPiece.player === piece.player) continue;
+
+                        const combatResult = simulateCombat(piece, otherPiece);
+
+                        if (piece.player === player) { // My piece is looking at an enemy
+                            if (otherPiece.revealed) {
+                                if (combatResult.winner === 'attacker') {
+                                    // Special Opportunity Bonuses
+                                    if (piece.type === 'engineer' && otherPiece.type === 'landmine') {
+                                        score += weights.engineerVsMineBonus;
+                                    } else if (piece.type === 'bomb' && highValuePieceRanks.includes(otherPiece.rank)) {
+                                        score += weights.bombVsHighValueBonus;
+                                    } else {
+                                        score += weights.opportunityBonus + (otherPiece.rank * weights.pieceValue / 2);
+                                    }
+                                }
+                            }
+                        } else { // An enemy piece is looking at my piece
+                            if (otherPiece.revealed && piece.revealed) { // Enemy is revealed and my piece is revealed
+                                if (combatResult.winner === 'defender') { // The enemy would win
+                                    if (highValuePieceRanks.includes(otherPiece.rank)) {
+                                        score -= weights.threatPenalty;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-        return score;
-    }
-
-    function getMoveScore(board, move, weights) {
-        const attacker = move.piece;
-        const defender = board[move.to.r][move.to.c];
-        if (defender) {
-            if (!defender.revealed) return weights.revealedPenalty - attacker.rank;
-            const combatResult = simulateCombat(attacker, defender);
-            if (combatResult.winner === 'attacker') return 100 + (defender.rank * weights.pieceValue);
-            else if (combatResult.winner === 'tie') return 50 - attacker.rank;
-            else return -100 - attacker.rank;
-        }
-        let score = 0;
-        if (attacker.player === PLAYERS.BLACK) score += (move.to.r - move.from.r) * weights.positionalBonus;
-        else score += (move.from.r - move.to.r) * weights.positionalBonus;
         return score;
     }
 
@@ -195,41 +229,29 @@
         const attackingMoves = allMoves.filter(move => board[move.to.r][move.to.c] !== null);
         const nonAttackingMoves = allMoves.filter(move => board[move.to.r][move.to.c] === null);
         let chosenMove;
-        if (attackingMoves.length > 0) chosenMove = attackingMoves[Math.floor(Math.random() * attackingMoves.length)];
-        else chosenMove = nonAttackingMoves[Math.floor(Math.random() * nonAttackingMoves.length)];
+        if (attackingMoves.length > 0) {
+            chosenMove = attackingMoves[Math.floor(Math.random() * attackingMoves.length)];
+        } else {
+            chosenMove = nonAttackingMoves[Math.floor(Math.random() * nonAttackingMoves.length)];
+        }
         return { bestMove: chosenMove, moveScores: [{ move: chosenMove, score: 1 }] };
     }
 
     function executeNormalAITurn(board, player, opponent, weights = DEFAULT_AI_WEIGHTS) {
-        const highValuePieces = ['field_marshal', 'general', 'major_general', 'brigadier'];
-        const myPieces = [];
-        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (board[r][c] && board[r][c].player === player) myPieces.push({ piece: board[r][c], r, c });
-        for (const myPiece of myPieces) {
-            if (!highValuePieces.includes(myPiece.piece.type)) continue;
-            const directions = [{ r: -1, c: 0 }, { r: 1, c: 0 }, { r: 0, c: -1 }, { r: 0, c: 1 }];
-            for (const dir of directions) {
-                const enemyR = myPiece.r + dir.r, enemyC = myPiece.c + dir.c;
-                if (enemyR >= 0 && enemyR < ROWS && enemyC >= 0 && enemyC < COLS) {
-                    const enemyPiece = board[enemyR][enemyC];
-                    if (enemyPiece && enemyPiece.player === opponent && enemyPiece.revealed) {
-                        if (simulateCombat(enemyPiece, myPiece.piece).winner === 'attacker') {
-                            const escapeMoves = getValidMoves(board, myPiece.r, myPiece.c).filter(move => !board[move.r][move.c]);
-                            if (escapeMoves.length > 0) {
-                                const defensiveMove = { from: { r: myPiece.r, c: myPiece.c }, to: escapeMoves[Math.floor(Math.random() * escapeMoves.length)], piece: myPiece.piece, isDefensive: true };
-                                return { bestMove: defensiveMove, moveScores: [{ move: defensiveMove, score: 999 }] };
-                            }
-                        }
-                    }
-                }
-            }
-        }
         const allMoves = getAllMovesForPlayer(board, player);
         if (allMoves.length === 0) return { bestMove: null, moveScores: [] };
-        const moveScores = allMoves.map(move => ({ move, score: getMoveScore(board, move, weights) }));
+
+        const moveScores = allMoves.map(move => {
+            const newBoard = applySimulatedMove(board, move);
+            const score = evaluateBoard(newBoard, player, weights);
+            return { move, score };
+        });
+
         moveScores.sort((a, b) => b.score - a.score);
         const bestScore = moveScores[0].score;
         const bestMoves = moveScores.filter(ms => ms.score === bestScore);
         const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+
         return { bestMove: chosenMove, moveScores };
     }
 

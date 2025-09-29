@@ -68,30 +68,56 @@ function runHeadlessGame(weights1, weights2) {
 }
 
 /**
- * Creates a new generation of AI weights through selection, crossover, and mutation.
+ * Selects a parent from the population using tournament selection,
+ * giving fitter individuals a higher chance to be selected.
  */
-function evolvePopulation(population) {
+function selectParent(population) {
+    const tournamentSize = 5;
+    let best = null;
+    for (let i = 0; i < tournamentSize; i++) {
+        const randomIndividual = population[Math.floor(Math.random() * population.length)];
+        if (best === null || randomIndividual.fitness > best.fitness) {
+            best = randomIndividual;
+        }
+    }
+    return best;
+}
+
+/**
+ * Creates a new generation of AI weights through elitism, crossover, and mutation.
+ */
+function evolvePopulation(population, generation) {
     population.sort((a, b) => b.fitness - a.fitness);
-    console.log(`  - Best AI of generation had fitness: ${population[0].fitness.toFixed(2)}`);
+    const bestFitness = population[0].fitness;
+    console.log(`  - Best AI of generation had fitness: ${bestFitness.toFixed(2)}`);
 
     const newPopulation = [];
-    const eliteCount = Math.floor(POPULATION_SIZE * 0.25);
+
+    // 1. Elitism: Keep the very best individual.
+    const eliteCount = 2;
     for (let i = 0; i < eliteCount; i++) {
-        newPopulation.push({ weights: population[i].weights, fitness: 0 });
+        newPopulation.push({ weights: { ...population[i].weights }, fitness: 0 });
     }
 
-    const parentPoolSize = Math.floor(POPULATION_SIZE * 0.5);
+    // 2. Crossover: Create the rest of the population from the best parents.
     while (newPopulation.length < POPULATION_SIZE) {
-        const parentA = population[Math.floor(Math.random() * parentPoolSize)];
-        const parentB = population[Math.floor(Math.random() * parentPoolSize)];
-        const childWeights = { ...parentA.weights };
-        const keys = Object.keys(childWeights);
-        for (let i = 0; i < keys.length / 2; i++) {
-            const key = keys[Math.floor(Math.random() * keys.length)];
-            childWeights[key] = parentB.weights[key];
+        const parentA = selectParent(population);
+        const parentB = selectParent(population);
+
+        // Weighted Crossover
+        const childWeights = {};
+        const totalFitness = parentA.fitness + parentB.fitness;
+        const weightA = totalFitness > 0 ? parentA.fitness / totalFitness : 0.5;
+        const weightB = totalFitness > 0 ? parentB.fitness / totalFitness : 0.5;
+
+        for (const key in parentA.weights) {
+            childWeights[key] = parentA.weights[key] * weightA + parentB.weights[key] * weightB;
         }
+
+        // 3. Mutation: Apply dynamic mutation.
+        const dynamicMutationRate = MUTATION_RATE * (1 - (generation / NUM_GENERATIONS)); // Decrease over time
         for (const key in childWeights) {
-            if (Math.random() < MUTATION_RATE) {
+            if (Math.random() < dynamicMutationRate) {
                 childWeights[key] *= (1 + (Math.random() - 0.5) * MUTATION_AMOUNT);
             }
         }
@@ -137,7 +163,7 @@ async function train() {
             p.fitness /= ((POPULATION_SIZE - 1) * NUM_GAMES_PER_MATCHUP);
         });
 
-        population = evolvePopulation(population);
+        population = evolvePopulation(population, gen);
     }
 
     console.log("\n--- Training Complete ---");
