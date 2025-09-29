@@ -249,13 +249,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             gameState.boardState[fromRow][fromCol] = null;
             if (combatResult.winner === 'attacker') {
-                attacker.revealed = true;
-                attacker.textColor = PLAYER_TEXT_COLORS[attacker.player]; // Set text to opponent's color
-                gameState.boardState[toRow][toCol] = attacker;
+                const newAttacker = {
+                    ...attacker,
+                    revealed: true,
+                    textColor: PLAYER_TEXT_COLORS[attacker.player]
+                };
+                gameState.boardState[toRow][toCol] = newAttacker;
             } else if (combatResult.winner === 'defender') {
-                defender.revealed = true;
-                defender.textColor = PLAYER_TEXT_COLORS[defender.player]; // Set text to opponent's color
-                gameState.boardState[toRow][toCol] = defender;
+                const newDefender = {
+                    ...defender,
+                    revealed: true,
+                    textColor: PLAYER_TEXT_COLORS[defender.player]
+                };
+                gameState.boardState[toRow][toCol] = newDefender;
             } else {
                 gameState.boardState[toRow][toCol] = null;
             }

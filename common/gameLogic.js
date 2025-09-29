@@ -35,7 +35,7 @@
         const pieces = [];
         for (const type in PIECE_COUNTS) {
             for (let i = 0; i < PIECE_COUNTS[type]; i++) {
-                pieces.push({ type, ...PIECE_TYPES[type], player, revealed: false, textColor: player });
+                pieces.push({ type, ...PIECE_TYPES[type], player, revealed: false, textColor: 'white' });
             }
         }
         return pieces;
