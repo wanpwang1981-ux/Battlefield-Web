@@ -28,6 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // GameLogic is loaded from common/gameLogic.js in index.html
     const { ROWS, COLS, PLAYERS, initBoard, getValidMoves, simulateCombat, executeEasyAITurn, executeNormalAITurn, executeHardAITurn, getAllMovesForPlayer } = GameLogic;
 
+    const PLAYER_TEXT_COLORS = {
+        [PLAYERS.RED]: 'black',
+        [PLAYERS.BLACK]: 'red'
+    };
+
     // --- 遊戲狀態管理 ---
     let gameState = {};
 
@@ -185,6 +190,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const pieceElement = document.createElement('div');
         pieceElement.classList.add('piece', piece.player);
         pieceElement.textContent = isUnknown ? '棋' : piece.name;
+
+        // Apply the inherited text color if it exists
+        if (piece.textColor) {
+            pieceElement.style.color = piece.textColor;
+        }
+
         if(isUnknown) pieceElement.classList.add('unknown');
         return pieceElement;
     }
@@ -239,9 +250,11 @@ document.addEventListener('DOMContentLoaded', () => {
             gameState.boardState[fromRow][fromCol] = null;
             if (combatResult.winner === 'attacker') {
                 attacker.revealed = true;
+                attacker.textColor = PLAYER_TEXT_COLORS[attacker.player]; // Set text to opponent's color
                 gameState.boardState[toRow][toCol] = attacker;
             } else if (combatResult.winner === 'defender') {
                 defender.revealed = true;
+                defender.textColor = PLAYER_TEXT_COLORS[defender.player]; // Set text to opponent's color
                 gameState.boardState[toRow][toCol] = defender;
             } else {
                 gameState.boardState[toRow][toCol] = null;

@@ -1,9 +1,0 @@
-{
-  "pieceValue": 11.062879680836854,
-  "revealedPenalty": 2.6748423576306166,
-  "positionalBonus": 0.9919226749015256,
-  "threatPenalty": 50.11160686010352,
-  "opportunityBonus": 34.85549728055212,
-  "engineerVsMineBonus": 58.78428097976146,
-  "bombVsHighValueBonus": 74.26766502061844
-}
