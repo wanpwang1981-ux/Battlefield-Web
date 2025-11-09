@@ -17,7 +17,17 @@
         <div id="mode-selection">
             <h2>選擇遊戲模式</h2>
             <button id="pvp-button">玩家對戰 (PvP)</button>
-            <button id="pvai-button">電腦對戰 (PvAI)</button>
+            <button id="pvai-button">玩家對電腦 (PvAI)</button>
+            <button id="cvc-button">電腦對電腦 (CvC)</button>
+        </div>
+
+        <!-- AI 難度選擇畫面，預設隱藏 -->
+        <div id="difficulty-selection" class="hidden">
+            <h2>選擇電腦難度</h2>
+            <button id="easy-ai-button">簡單</button>
+            <button id="normal-ai-button">普通</button>
+            <button id="hard-ai-button">困難</button>
+            <button id="back-to-mode-selection">返回</button>
         </div>
 
         <!-- 主要遊戲區域，預設隱藏 -->
@@ -52,12 +62,17 @@
                 <div id="game-log"></div>
             </div>
 
-            <!-- 重新開始按鈕 -->
-             <button id="reset-button">重新開始</button>
+            <!-- 控制按鈕 -->
+            <div id="control-buttons">
+                <button id="reset-button">重新開始</button>
+                <button id="download-log-button">下載日誌</button>
+            </div>
         </div>
     </div>
 
-    <!-- 連結主要的 JavaScript 檔案 -->
+    <!-- 先載入共享的核心遊戲邏輯 -->
+    <script src="common/gameLogic.js"></script>
+    <!-- 再載入處理前端畫面的主要腳本 -->
     <script src="js/game.js"></script>
 </body>
 </html>

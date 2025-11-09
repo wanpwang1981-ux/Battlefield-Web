@@ -1,0 +1,14 @@
+{
+  "name": "luzhanqi-ai-backend",
+  "version": "1.0.0",
+  "description": "Backend server for running Lu Zhan Qi AI simulations.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
